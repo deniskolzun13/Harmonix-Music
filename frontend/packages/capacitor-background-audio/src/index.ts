@@ -1,4 +1,4 @@
-﻿import { registerPlugin } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 import type { BackgroundAudioPlugin } from './definitions';
 
 export const BackgroundAudio = registerPlugin<BackgroundAudioPlugin>('BackgroundAudio', {
@@ -6,6 +6,8 @@ export const BackgroundAudio = registerPlugin<BackgroundAudioPlugin>('Background
     enable: async () => {},
     disable: async () => {},
     update: async () => {},
+    addListener: async () => ({ remove: async () => {} }),
+    removeAllListeners: async () => {},
   }),
 });
 

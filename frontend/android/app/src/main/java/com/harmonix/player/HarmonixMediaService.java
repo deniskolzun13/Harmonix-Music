@@ -20,9 +20,13 @@ public class HarmonixMediaService extends Service {
     public static final String ACTION_START = "com.harmonix.player.action.START";
     public static final String ACTION_STOP = "com.harmonix.player.action.STOP";
     public static final String ACTION_UPDATE = "com.harmonix.player.action.UPDATE";
+    public static final String ACTION_PREV = "com.harmonix.player.action.PREV";
+    public static final String ACTION_PLAY_PAUSE = "com.harmonix.player.action.PLAY_PAUSE";
+    public static final String ACTION_NEXT = "com.harmonix.player.action.NEXT";
 
     public static final String EXTRA_TITLE = "extra_title";
     public static final String EXTRA_ARTIST = "extra_artist";
+    public static final String EXTRA_IS_PLAYING = "extra_is_playing";
 
     private static final String CHANNEL_ID = "harmonix_media_playback";
     private static final int NOTIFICATION_ID = 1001;
@@ -67,11 +71,19 @@ public class HarmonixMediaService extends Service {
         if (ACTION_START.equals(action)) {
             String title = intent.getStringExtra(EXTRA_TITLE);
             String artist = intent.getStringExtra(EXTRA_ARTIST);
-            startForegroundServiceInternal(title, artist);
+            boolean isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, true);
+            startForegroundServiceInternal(title, artist, isPlaying);
         } else if (ACTION_UPDATE.equals(action)) {
             String title = intent.getStringExtra(EXTRA_TITLE);
             String artist = intent.getStringExtra(EXTRA_ARTIST);
-            updateNotification(title, artist);
+            boolean isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, true);
+            updateNotification(title, artist, isPlaying);
+        } else if (ACTION_PREV.equals(action)) {
+            HarmonixBackgroundAudioPlugin.onMediaAction("prev");
+        } else if (ACTION_PLAY_PAUSE.equals(action)) {
+            HarmonixBackgroundAudioPlugin.onMediaAction("togglePlay");
+        } else if (ACTION_NEXT.equals(action)) {
+            HarmonixBackgroundAudioPlugin.onMediaAction("next");
         } else if (ACTION_STOP.equals(action)) {
             stopForegroundServiceInternal();
         }
@@ -79,14 +91,14 @@ public class HarmonixMediaService extends Service {
         return START_NOT_STICKY;
     }
 
-    private void startForegroundServiceInternal(String title, String artist) {
+    private void startForegroundServiceInternal(String title, String artist, boolean isPlaying) {
         if (wakeLock != null && !wakeLock.isHeld()) {
             try {
                 wakeLock.acquire();
             } catch (Exception ignored) {}
         }
 
-        Notification notification = buildNotification(title, artist);
+        Notification notification = buildNotification(title, artist, isPlaying);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
@@ -100,8 +112,8 @@ public class HarmonixMediaService extends Service {
         }
     }
 
-    private void updateNotification(String title, String artist) {
-        Notification notification = buildNotification(title, artist);
+    private void updateNotification(String title, String artist, boolean isPlaying) {
+        Notification notification = buildNotification(title, artist, isPlaying);
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, notification);
@@ -119,7 +131,7 @@ public class HarmonixMediaService extends Service {
         stopSelf();
     }
 
-    private Notification buildNotification(String title, String artist) {
+    private Notification buildNotification(String title, String artist, boolean isPlaying) {
         Intent launchIntent = new Intent(this, MainActivity.class);
         launchIntent.setAction(Intent.ACTION_MAIN);
         launchIntent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -131,15 +143,31 @@ public class HarmonixMediaService extends Service {
         }
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, launchIntent, flags);
 
+        // Интерактивные PendingIntent для кнопок в шторке Android
+        Intent prevIntent = new Intent(this, HarmonixMediaService.class).setAction(ACTION_PREV);
+        PendingIntent prevPending = PendingIntent.getService(this, 1, prevIntent, flags);
+
+        Intent playPauseIntent = new Intent(this, HarmonixMediaService.class).setAction(ACTION_PLAY_PAUSE);
+        PendingIntent playPausePending = PendingIntent.getService(this, 2, playPauseIntent, flags);
+
+        Intent nextIntent = new Intent(this, HarmonixMediaService.class).setAction(ACTION_NEXT);
+        PendingIntent nextPending = PendingIntent.getService(this, 3, nextIntent, flags);
+
         String displayTitle = (title != null && !title.trim().isEmpty()) ? title : "Harmonix Player";
         String displayArtist = (artist != null && !artist.trim().isEmpty()) ? artist : "Воспроизведение музыки";
+
+        int playIcon = isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play;
+        String playTitle = isPlaying ? "Пауза" : "Играть";
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(displayTitle)
             .setContentText(displayArtist)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
-            .setOngoing(true)
+            .addAction(android.R.drawable.ic_media_previous, "Предыдущий", prevPending)
+            .addAction(playIcon, playTitle, playPausePending)
+            .addAction(android.R.drawable.ic_media_next, "Следующий", nextPending)
+            .setOngoing(isPlaying)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)

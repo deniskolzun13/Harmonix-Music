@@ -171,15 +171,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [isPlaying]);
 
-  // Управление нативным foreground service для фонового воспроизведения на Android
+  // Управление нативным foreground service для фонового воспроизведения и кнопок в шторке Android
   useEffect(() => {
     if (isPlaying && currentTrack) {
       BackgroundAudio.enable({
         title: currentTrack.title,
         artist: currentTrack.artist,
+        isPlaying: true,
       }).catch((err) => {
         console.warn('BackgroundAudio enable error:', err);
       });
+    } else if (!isPlaying && currentTrack) {
+      // Обновляем кнопку в шторке на "Играть" при паузе
+      BackgroundAudio.update({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        isPlaying: false,
+      }).catch(() => {});
     } else {
       BackgroundAudio.disable().catch((err) => {
         console.warn('BackgroundAudio disable error:', err);
@@ -187,9 +195,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     return () => {
-      BackgroundAudio.disable().catch(() => {});
+      if (!currentTrack) {
+        BackgroundAudio.disable().catch(() => {});
+      }
     };
   }, [isPlaying, currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
+
+  // Слушатель нажатий на кнопки в шторке Android (Предыдущий / Играть / Следующий)
+  useEffect(() => {
+    let subHandle: { remove: () => void } | null = null;
+
+    BackgroundAudio.addListener('mediaAction', (data: { action: string }) => {
+      if (data.action === 'prev') {
+        prevTrack();
+      } else if (data.action === 'togglePlay') {
+        togglePlay();
+      } else if (data.action === 'next') {
+        nextTrack();
+      }
+    })
+      .then((handle) => {
+        subHandle = handle;
+      })
+      .catch((err) => {
+        console.warn('BackgroundAudio mediaAction listener error:', err);
+      });
+
+    return () => {
+      subHandle?.remove();
+    };
+  }, [currentTrack, isPlaying, queue]);
 
   // Управление Audio Focus на Android (входящие звонки, голосовые подсказки, сторонние плееры)
   useEffect(() => {
