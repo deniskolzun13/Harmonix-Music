@@ -276,3 +276,44 @@ export function getArtistsList(
 
   return result;
 }
+
+/**
+ * Находит или динамически формирует данные музыканта по его имени
+ */
+export function findArtistByName(
+  artistName: string,
+  extraTracks: Track[] = [],
+  cachedTracks: Track[] = []
+): ArtistSummary {
+  const cleanName = artistName.trim();
+  const lowerName = cleanName.toLowerCase();
+  const savedPlaylists = getSavedPlaylists();
+  const allArtists = getArtistsList(savedPlaylists, cachedTracks);
+
+  const found = allArtists.find((a) => a.name.trim().toLowerCase() === lowerName);
+  let tracks = found ? [...found.tracks] : [];
+  let cover_url = found?.cover_url;
+
+  // Добавляем треки из контекста (например текущий трек или очередь воспроизведения)
+  for (const t of extraTracks) {
+    if (t && t.artist && t.artist.trim().toLowerCase() === lowerName) {
+      if (!tracks.some((x) => x.id === t.id)) {
+        tracks.push(t);
+        if (!cover_url && t.cover_url) {
+          cover_url = t.cover_url;
+        }
+      }
+    }
+  }
+
+  const totalDuration = tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+
+  return {
+    name: found ? found.name : cleanName,
+    cover_url: cover_url,
+    trackCount: tracks.length,
+    totalDuration,
+    tracks,
+  };
+}
+

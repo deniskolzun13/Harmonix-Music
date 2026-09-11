@@ -17,7 +17,7 @@ import {
   Mic,
   Plus,
 } from 'lucide-react';
-import { Track, ArtistSummary } from '../../types';
+import { Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
 import { usePlayer } from '../../context/PlayerContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,14 +35,12 @@ import {
   getSavedPlaylists,
   saveImportedPlaylist,
   deleteSavedPlaylist,
-  deleteTrackFromPlaylist,
   getArtistsList,
   SavedPlaylistRecord,
 } from '../../services/playlistStorage';
 import { ImportUrlModal } from '../Import/ImportUrlModal';
 import { ThemeModal } from '../Theme/ThemeModal';
 import { ArtistCard } from '../Artist/ArtistCard';
-import { ArtistDetailModal } from '../Artist/ArtistDetailModal';
 import { AddTrackModal } from '../Track/AddTrackModal';
 import { useBackNavigation } from '../../services/backNavigation';
 
@@ -60,7 +58,7 @@ interface PlayerMainProps {
 }
 
 export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, openArtist } = usePlayer();
   const { theme } = useTheme();
 
   const hasYandexToken = Boolean(localStorage.getItem('harmonix_yandex_token'));
@@ -98,8 +96,6 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
   // Музыканты / Исполнители (Artist state)
-  const [selectedArtist, setSelectedArtist] = useState<ArtistSummary | null>(null);
-  const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
 
   // Модальное окно добавления трека (локальный файл / ссылка / вручную)
@@ -108,7 +104,6 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
   // Перехват системного жеста "Назад" для модальных окон и вкладок
   useBackNavigation('add_track_modal', isAddTrackModalOpen, () => setIsAddTrackModalOpen(false), 45);
-  useBackNavigation('artist_modal', isArtistModalOpen, () => setIsArtistModalOpen(false), 35);
   useBackNavigation('import_modal', isImportModalOpen, () => setIsImportModalOpen(false), 30);
   useBackNavigation('theme_modal', isThemeModalOpen, () => setIsThemeModalOpen(false), 25);
   useBackNavigation('library_tab', activeTab !== 'playlists', () => setActiveTab('playlists'), 15);
@@ -150,9 +145,6 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
   // Список всех музыкантов из сохраненных плейлистов и оффлайн-кэша
   const artistsList = getArtistsList(savedPlaylists, cachedTracks);
-  const activeSelectedArtist = selectedArtist
-    ? artistsList.find((a) => a.name.toLowerCase() === selectedArtist.name.toLowerCase()) || selectedArtist
-    : null;
 
   const displayedArtists = artistSearchQuery.trim()
     ? artistsList.filter((a) => a.name.toLowerCase().includes(artistSearchQuery.toLowerCase()))
@@ -164,26 +156,6 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     playTrack(tracks[0], tracks);
   };
 
-  // Перемешать и воспроизвести
-  const handleShuffleTracks = (tracks: Track[]) => {
-    if (!tracks || tracks.length === 0) return;
-    const shuffled = [...tracks].sort(() => Math.random() - 0.5);
-    playTrack(shuffled[0], shuffled);
-  };
-
-  // Универсальное удаление трека из медиатеки
-  const handleDeleteTrackGeneral = async (trackId: string) => {
-    for (const rec of savedPlaylists) {
-      if (rec.tracks.some((t) => t.id === trackId)) {
-        const updated = deleteTrackFromPlaylist(rec.playlist.id, trackId);
-        setSavedPlaylists(updated);
-      }
-    }
-    if (cachedTrackIds.has(trackId)) {
-      await deleteCachedTrack(trackId);
-      await refreshCacheInfo();
-    }
-  };
 
   // Быстрая вставка из буфера обмена
   const handlePasteQuickUrl = async () => {
@@ -720,10 +692,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                   <ArtistCard
                     key={art.name}
                     artist={art}
-                    onSelectArtist={(a) => {
-                      setSelectedArtist(a);
-                      setIsArtistModalOpen(true);
-                    }}
+                    onSelectArtist={(a) => openArtist(a.name)}
                     onPlayArtist={(a) => handlePlayAllTracks(a.tracks)}
                     onAddTrack={(a) => {
                       setAddTrackDefaultArtist(a.name);
@@ -860,7 +829,15 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                         {track.title}
                       </p>
                       <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
-                        <span>{track.artist}</span>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openArtist(track.artist);
+                          }}
+                          className="hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer"
+                        >
+                          {track.artist}
+                        </span>
                         {isCached && (
                           <span
                             className={`inline-flex items-center text-[10px] font-medium ${
@@ -944,22 +921,6 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     </>
   )}
 
-      {/* Экран музыканта (ArtistDetailModal) */}
-      <ArtistDetailModal
-        artist={activeSelectedArtist}
-        isOpen={isArtistModalOpen}
-        onClose={() => setIsArtistModalOpen(false)}
-        onPlayTrack={(track, queue) => playTrack(track, queue)}
-        onPlayAll={(tracks) => handlePlayAllTracks(tracks)}
-        onShufflePlay={(tracks) => handleShuffleTracks(tracks)}
-        onAddTrackToArtist={(artistName) => {
-          setAddTrackDefaultArtist(artistName);
-          setIsAddTrackModalOpen(true);
-        }}
-        cachedTrackIds={cachedTrackIds}
-        onDownloadTrack={(track) => handleDownloadSingleTrack({ stopPropagation: () => {} } as any, track)}
-        onDeleteTrack={(trackId) => handleDeleteTrackGeneral(trackId)}
-      />
 
       {/* Модальное окно добавления треков (AddTrackModal) */}
       <AddTrackModal

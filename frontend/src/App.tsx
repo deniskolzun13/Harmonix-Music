@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
-import { PlayerProvider } from './context/PlayerContext';
+import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { BottomBar, TabType } from './components/Navigation/BottomBar';
 import { MiniPlayer } from './components/Player/MiniPlayer';
 import { FullPlayerModal } from './components/Player/FullPlayerModal';
+import { ArtistDetailModal } from './components/Artist/ArtistDetailModal';
 import { PlayerMain } from './components/Player/PlayerMain';
 import { AccountsModal } from './components/Settings/AccountsModal';
 import { useBackNavigation } from './services/backNavigation';
@@ -13,6 +14,7 @@ import { useBackNavigation } from './services/backNavigation';
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('player');
   const { theme } = useTheme();
+  const { selectedArtist, isArtistModalOpen, closeArtist } = usePlayer();
 
   // Настройка строки состояния Android: прозрачность и светлые иконки
   useEffect(() => {
@@ -44,6 +46,13 @@ const AppContent: React.FC = () => {
 
       {/* Полноэкранный плеер */}
       <FullPlayerModal />
+
+      {/* Экран карточки музыканта (открывается поверх плеера или списка треков) */}
+      <ArtistDetailModal
+        artist={selectedArtist}
+        isOpen={isArtistModalOpen}
+        onClose={closeArtist}
+      />
 
       {/* Закрепленный блок снизу: Мини-плеер + Нижняя панель навигации */}
       <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none flex flex-col justify-end items-center">

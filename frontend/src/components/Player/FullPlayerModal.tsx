@@ -43,7 +43,8 @@ export const FullPlayerModal: React.FC = () => {
     toggleShuffle,
     toggleRepeat,
     setIsFullPlayerOpen,
-    playTrack
+    playTrack,
+    openArtist,
   } = usePlayer();
 
   const [showQueue, setShowQueue] = useState(false);
@@ -230,7 +231,15 @@ export const FullPlayerModal: React.FC = () => {
                   <span className="text-xs text-gray-500 w-4 text-center">{idx + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{t.title}</p>
-                    <p className="text-xs text-gray-400 truncate">{t.artist}</p>
+                    <p
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openArtist(t.artist);
+                      }}
+                      className="text-xs text-gray-400 truncate hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer inline-block"
+                    >
+                      {t.artist}
+                    </p>
                   </div>
                   <span className="text-xs text-gray-500">{formatTime(t.duration)}</span>
                 </div>
@@ -268,7 +277,12 @@ export const FullPlayerModal: React.FC = () => {
         >
           <div className="min-w-0 flex-1 pr-4">
             <h2 className="text-xl font-bold text-white truncate">{currentTrack.title}</h2>
-            <p className="text-sm text-gray-400 truncate mt-1">{currentTrack.artist}</p>
+            <p
+              onClick={() => openArtist(currentTrack.artist)}
+              className="text-sm text-gray-400 truncate mt-1 hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer inline-block"
+            >
+              {currentTrack.artist}
+            </p>
           </div>
           <button
             onClick={() => setIsLiked(!isLiked)}

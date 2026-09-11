@@ -4,7 +4,7 @@ import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
 
 export const MiniPlayer: React.FC = () => {
-  const { currentTrack, isPlaying, togglePlay, nextTrack, currentTime, duration, setIsFullPlayerOpen } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, nextTrack, currentTime, duration, setIsFullPlayerOpen, openArtist } = usePlayer();
 
   if (!currentTrack) return null;
 
@@ -54,7 +54,15 @@ export const MiniPlayer: React.FC = () => {
               </span>
               {platformBadge()}
             </div>
-            <p className="text-xs text-gray-400 truncate mt-0.5">{currentTrack.artist}</p>
+            <p
+              onClick={(e) => {
+                e.stopPropagation();
+                openArtist(currentTrack.artist);
+              }}
+              className="text-xs text-gray-400 truncate mt-0.5 hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer inline-block"
+            >
+              {currentTrack.artist}
+            </p>
           </div>
         </div>
 

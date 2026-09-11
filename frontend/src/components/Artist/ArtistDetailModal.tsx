@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Play,
@@ -15,17 +15,19 @@ import {
 import { ArtistSummary, Track } from '../../types';
 import { CoverImage } from '../Common/CoverImage';
 import { usePlayer } from '../../context/PlayerContext';
+import { getCachedTrackIds, saveTrackToCache, deleteCachedTrack } from '../../services/cacheManager';
+import { useBackNavigation } from '../../services/backNavigation';
 
 interface ArtistDetailModalProps {
   artist: ArtistSummary | null;
   isOpen: boolean;
   onClose: () => void;
-  onPlayTrack: (track: Track, queue: Track[]) => void;
-  onPlayAll: (tracks: Track[]) => void;
-  onShufflePlay: (tracks: Track[]) => void;
-  onAddTrackToArtist: (artistName: string) => void;
-  cachedTrackIds: Set<string>;
-  onDownloadTrack: (track: Track) => void;
+  onPlayTrack?: (track: Track, queue: Track[]) => void;
+  onPlayAll?: (tracks: Track[]) => void;
+  onShufflePlay?: (tracks: Track[]) => void;
+  onAddTrackToArtist?: (artistName: string) => void;
+  cachedTrackIds?: Set<string>;
+  onDownloadTrack?: (track: Track) => void;
   onDeleteTrack?: (trackId: string) => void;
 }
 
@@ -50,22 +52,80 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
   onPlayAll,
   onShufflePlay,
   onAddTrackToArtist,
-  cachedTrackIds,
-  onDownloadTrack,
-  onDeleteTrack,
+  cachedTrackIds: propCachedIds,
+  onDownloadTrack: propDownload,
+  onDeleteTrack: propDelete,
 }) => {
-  const { currentTrack, isPlaying, togglePlay } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, playTrack } = usePlayer();
   const [filterQuery, setFilterQuery] = useState('');
+  const [localCachedIds, setLocalCachedIds] = useState<Set<string>>(new Set());
+
+  // Перехват системного жеста "Назад" на Android для закрытия карточки музыканта
+  useBackNavigation('artist_detail_modal', isOpen, onClose, 55);
+
+  useEffect(() => {
+    if (isOpen) {
+      getCachedTrackIds().then(setLocalCachedIds).catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen || !artist) return null;
 
+  const cachedTrackIds = propCachedIds || localCachedIds;
   const tracks = artist.tracks || [];
   const filteredTracks = filterQuery.trim()
     ? tracks.filter((t) => t.title.toLowerCase().includes(filterQuery.toLowerCase()))
     : tracks;
 
+  const handlePlayTrack = (track: Track) => {
+    if (onPlayTrack) {
+      onPlayTrack(track, tracks);
+    } else {
+      playTrack(track, tracks);
+    }
+  };
+
+  const handlePlayAll = (allTracks: Track[]) => {
+    if (onPlayAll) {
+      onPlayAll(allTracks);
+    } else if (allTracks.length > 0) {
+      playTrack(allTracks[0], allTracks);
+    }
+  };
+
+  const handleShufflePlay = (allTracks: Track[]) => {
+    if (onShufflePlay) {
+      onShufflePlay(allTracks);
+    } else if (allTracks.length > 0) {
+      const shuffled = [...allTracks].sort(() => Math.random() - 0.5);
+      playTrack(shuffled[0], shuffled);
+    }
+  };
+
+  const handleDownloadTrack = async (track: Track) => {
+    if (propDownload) {
+      propDownload(track);
+    } else {
+      await saveTrackToCache(track);
+      setLocalCachedIds((prev) => new Set([...prev, track.id]));
+    }
+  };
+
+  const handleDeleteTrack = async (trackId: string) => {
+    if (propDelete) {
+      propDelete(trackId);
+    } else {
+      await deleteCachedTrack(trackId);
+      setLocalCachedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(trackId);
+        return next;
+      });
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0d0f14] text-white overflow-hidden animate-fadeIn select-none">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0f14] text-white overflow-hidden animate-fadeIn select-none">
       {/* 1. Декоративный фоновый размытый баннер */}
       {artist.cover_url && (
         <div className="absolute top-0 left-0 right-0 h-72 overflow-hidden pointer-events-none opacity-30 z-0">
@@ -144,7 +204,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
           {/* Кнопки действий: Слушать всё, Перемешать, Добавить трек */}
           <div className="flex items-center gap-2.5 mt-5 w-full max-w-sm justify-center">
             <button
-              onClick={() => onPlayAll(tracks)}
+              onClick={() => handlePlayAll(tracks)}
               disabled={tracks.length === 0}
               className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
             >
@@ -153,7 +213,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
             </button>
 
             <button
-              onClick={() => onShufflePlay(tracks)}
+              onClick={() => handleShufflePlay(tracks)}
               disabled={tracks.length === 0}
               title="Перемешать треки"
               className="py-3 px-3.5 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold transition-all shadow"
@@ -161,13 +221,15 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
               <Shuffle size={16} />
             </button>
 
-            <button
-              onClick={() => onAddTrackToArtist(artist.name)}
-              className="py-3 px-4 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-95 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow"
-            >
-              <Plus size={15} />
-              <span>+ Трек</span>
-            </button>
+            {onAddTrackToArtist && (
+              <button
+                onClick={() => onAddTrackToArtist(artist.name)}
+                className="py-3 px-4 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-95 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow"
+              >
+                <Plus size={15} />
+                <span>+ Трек</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -218,7 +280,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                       if (isCurrent) {
                         togglePlay();
                       } else {
-                        onPlayTrack(track, tracks);
+                        handlePlayTrack(track);
                       }
                     }}
                     className={`flex items-center justify-between p-2.5 rounded-2xl cursor-pointer transition-all border ${
@@ -274,7 +336,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDownloadTrack(track);
+                          handleDownloadTrack(track);
                         }}
                         title={isCached ? 'Сохранено на телефоне' : 'Кэшировать на телефон'}
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
@@ -302,12 +364,12 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                       </button>
 
                       {/* Удаление трека (если передано) */}
-                      {onDeleteTrack && (
+                      {propDelete && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm(`Удалить трек "${track.title}"?`)) {
-                              onDeleteTrack(track.id);
+                              handleDeleteTrack(track.id);
                             }
                           }}
                           title="Удалить трек"

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Track } from '../types';
+import { Track, ArtistSummary } from '../types';
 import { getCachedTrackAudioUrl } from '../services/cacheManager';
 import { getDirectYmAudioUrl } from '../services/standaloneImporter';
 import { getServerUrl } from '../api';
+import { findArtistByName } from '../services/playlistStorage';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -14,6 +15,8 @@ interface PlayerContextType {
   repeatMode: 'off' | 'all' | 'one';
   queue: Track[];
   isFullPlayerOpen: boolean;
+  selectedArtist: ArtistSummary | null;
+  isArtistModalOpen: boolean;
   playTrack: (track: Track, newQueue?: Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -23,6 +26,8 @@ interface PlayerContextType {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   setIsFullPlayerOpen: (open: boolean) => void;
+  openArtist: (artistName: string) => void;
+  closeArtist: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -37,8 +42,25 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
   const [queue, setQueue] = useState<Track[]>([]);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [selectedArtist, setSelectedArtist] = useState<ArtistSummary | null>(null);
+  const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const openArtist = (artistName: string) => {
+    if (!artistName || !artistName.trim()) return;
+    const allContextTracks: Track[] = [...queue];
+    if (currentTrack && !allContextTracks.some((t) => t.id === currentTrack.id)) {
+      allContextTracks.push(currentTrack);
+    }
+    const summary = findArtistByName(artistName, allContextTracks);
+    setSelectedArtist(summary);
+    setIsArtistModalOpen(true);
+  };
+
+  const closeArtist = () => {
+    setIsArtistModalOpen(false);
+  };
 
   // Инициализация Audio элемента
   useEffect(() => {
@@ -230,6 +252,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         repeatMode,
         queue,
         isFullPlayerOpen,
+        selectedArtist,
+        isArtistModalOpen,
         playTrack,
         togglePlay,
         nextTrack,
@@ -239,6 +263,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleShuffle,
         toggleRepeat,
         setIsFullPlayerOpen,
+        openArtist,
+        closeArtist,
       }}
     >
       {children}
