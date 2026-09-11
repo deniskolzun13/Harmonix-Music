@@ -196,3 +196,34 @@ def test_transfer_persistence_and_history():
     # Свежая задача должна остаться
     assert load_task_from_db(test_task_id) is not None
 
+
+def test_rate_limit_retry_and_resilience():
+    from app.utils.retry_helper import api_retry, should_retry_exception
+    import requests
+
+    # 1. Проверяем should_retry_exception
+    err_429 = requests.exceptions.HTTPError("429 Too Many Requests")
+    setattr(err_429, "status_code", 429)
+    assert should_retry_exception(err_429) is True
+
+    err_conn = ConnectionError("Network unreachable")
+    assert should_retry_exception(err_conn) is True
+
+    err_other = ValueError("Some regular validation error")
+    assert should_retry_exception(err_other) is False
+
+    # 2. Проверяем работу декоратора api_retry
+    call_count = 0
+
+    @api_retry
+    def flaky_api_call():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise ConnectionError("Temporary connection failure")
+        return "success"
+
+    res = flaky_api_call()
+    assert res == "success"
+    assert call_count == 3
+

@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional, Tuple
 from app.models import Playlist, Track, PlatformEnum
 from app.platforms.base import BasePlatformAdapter
+from app.utils.retry_helper import api_retry
 
 logger = logging.getLogger("harmonix.spotify")
 
@@ -148,6 +149,7 @@ class SpotifyAdapter(BasePlatformAdapter):
             logger.error(f"Ошибка получения треков плейлиста Spotify: {e}")
             return []
 
+    @api_retry
     def search_tracks(self, query: str, limit: int = 10) -> List[Track]:
         if not self.is_authenticated():
             return []
@@ -157,7 +159,7 @@ class SpotifyAdapter(BasePlatformAdapter):
             return [self._convert_track(t) for t in items]
         except Exception as e:
             logger.error(f"Ошибка поиска в Spotify: {e}")
-            return []
+            raise
 
     def create_playlist(self, title: str, description: str = "") -> Optional[Playlist]:
         if not self.is_authenticated():
@@ -180,6 +182,7 @@ class SpotifyAdapter(BasePlatformAdapter):
             logger.error(f"Ошибка создания плейлиста в Spotify: {e}")
             return None
 
+    @api_retry
     def add_tracks_to_playlist(self, playlist_id: str, tracks: List[Track]) -> int:
         if not self.is_authenticated() or not tracks:
             return 0
@@ -199,7 +202,7 @@ class SpotifyAdapter(BasePlatformAdapter):
             return total_added
         except Exception as e:
             logger.error(f"Ошибка добавления треков в Spotify: {e}")
-            return 0
+            raise
 
     def get_stream_url(self, track_id: str) -> Optional[str]:
         if not self.is_authenticated():

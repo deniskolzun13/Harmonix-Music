@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional, Tuple
 from app.models import Playlist, Track, PlatformEnum
 from app.platforms.base import BasePlatformAdapter
+from app.utils.retry_helper import api_retry
 
 logger = logging.getLogger("harmonix.yandex")
 
@@ -130,6 +131,7 @@ class YandexMusicAdapter(BasePlatformAdapter):
             logger.error(f"Ошибка получения треков плейлиста Яндекс {playlist_id}: {e}")
             return []
 
+    @api_retry
     def search_tracks(self, query: str, limit: int = 10) -> List[Track]:
         if not self.is_authenticated():
             return []
@@ -140,7 +142,7 @@ class YandexMusicAdapter(BasePlatformAdapter):
             return [self._convert_track(t) for t in search_res.tracks.results[:limit]]
         except Exception as e:
             logger.error(f"Ошибка поиска Яндекс Музыка: {e}")
-            return []
+            raise
 
     def create_playlist(self, title: str, description: str = "") -> Optional[Playlist]:
         if not self.is_authenticated():
@@ -158,6 +160,7 @@ class YandexMusicAdapter(BasePlatformAdapter):
             logger.error(f"Ошибка создания плейлиста Яндекс: {e}")
             return None
 
+    @api_retry
     def add_tracks_to_playlist(self, playlist_id: str, tracks: List[Track]) -> int:
         if not self.is_authenticated() or not tracks:
             return 0
@@ -175,10 +178,11 @@ class YandexMusicAdapter(BasePlatformAdapter):
                         added += 1
                 except Exception as ex:
                     logger.debug(f"Не удалось добавить трек {tr.id} в Яндекс: {ex}")
+                    raise
             return added
         except Exception as e:
             logger.error(f"Ошибка добавления треков в Яндекс: {e}")
-            return added
+            raise
 
     def get_stream_url(self, track_id: str) -> Optional[str]:
         if not self.is_authenticated():

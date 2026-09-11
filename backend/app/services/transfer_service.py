@@ -80,50 +80,83 @@ class TransferService:
             task.target_playlist_name = pl_name
             save_task_record(task)
 
-            # 3. Сопоставляем каждый трек
+            # 3. Сопоставляем каждый трек с адаптивной задержкой
             matched_tracks_to_add = []
+            current_delay = 0.35  # Базовая пауза 0.3-0.5 сек
+            consecutive_errors = 0
 
             for index, src_track in enumerate(source_tracks, start=1):
                 task.message = f"Сопоставление ({index}/{task.total}): {src_track.artist} - {src_track.title}"
                 
-                # Поисковый запрос
-                query = f"{src_track.artist} {src_track.title}"
-                candidates = target_adapter.search_tracks(query, limit=5)
-                
-                best_match, score = find_best_match(src_track, candidates)
+                try:
+                    # Поисковый запрос
+                    query = f"{src_track.artist} {src_track.title}"
+                    candidates = target_adapter.search_tracks(query, limit=5)
+                    
+                    best_match, score = find_best_match(src_track, candidates)
 
-                if best_match and score >= 65.0:
-                    status = "matched" if score >= 80.0 else "low_confidence"
-                    res = TransferTrackResult(
-                        source_track=src_track,
-                        matched_track=best_match,
-                        confidence=score,
-                        status=status
+                    if best_match and score >= 65.0:
+                        status = "matched" if score >= 80.0 else "low_confidence"
+                        res = TransferTrackResult(
+                            source_track=src_track,
+                            matched_track=best_match,
+                            confidence=score,
+                            status=status
+                        )
+                        task.results.append(res)
+                        task.matched += 1
+                        matched_tracks_to_add.append(best_match)
+                    else:
+                        res = TransferTrackResult(
+                            source_track=src_track,
+                            matched_track=None,
+                            confidence=score,
+                            status="not_found"
+                        )
+                        task.results.append(res)
+                        task.failed += 1
+
+                    # Успешный шаг: сбрасываем счетчик ошибок и плавно возвращаем паузу к базовой
+                    consecutive_errors = 0
+                    current_delay = max(0.3, current_delay * 0.9)
+
+                except Exception as track_err:
+                    logger.warning(
+                        f"Ошибка переноса трека '{src_track.artist} - {src_track.title}': {track_err}",
+                        exc_info=False
                     )
-                    task.results.append(res)
-                    task.matched += 1
-                    matched_tracks_to_add.append(best_match)
-                else:
                     res = TransferTrackResult(
                         source_track=src_track,
                         matched_track=None,
-                        confidence=score,
-                        status="not_found"
+                        confidence=0.0,
+                        status="error",
+                        error_detail=str(track_err)
                     )
                     task.results.append(res)
                     task.failed += 1
+
+                    # Ошибка: адаптивно увеличиваем задержку
+                    consecutive_errors += 1
+                    current_delay = min(5.0, max(0.5, current_delay * 1.5 + (consecutive_errors * 0.3)))
 
                 task.processed = index
                 save_track_result(task_id, res)
                 save_task_record(task)
 
-                # Микропауза для плавности трансляции прогресса и избежания rate-limit
-                await asyncio.sleep(0.1)
+                # Адаптивная пауза между треками
+                await asyncio.sleep(current_delay)
 
             # 4. Добавляем сопоставленные треки в целевой сервис
-            task.message = f"Добавление {len(matched_tracks_to_add)} треков в {req.target_platform.value.upper()}..."
-            save_task_record(task)
-            added_count = target_adapter.add_tracks_to_playlist(target_playlist_id, matched_tracks_to_add)
+            if matched_tracks_to_add:
+                task.message = f"Добавление {len(matched_tracks_to_add)} треков в {req.target_platform.value.upper()}..."
+                save_task_record(task)
+                try:
+                    added_count = target_adapter.add_tracks_to_playlist(target_playlist_id, matched_tracks_to_add)
+                except Exception as add_err:
+                    logger.error(f"Ошибка при добавлении треков в целевой плейлист: {add_err}")
+                    added_count = 0
+            else:
+                added_count = 0
 
             task.status = "completed"
             task.message = f"Перенос завершен! Успешно сопоставлено и добавлено {added_count} из {task.total} треков."

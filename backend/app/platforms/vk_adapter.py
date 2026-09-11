@@ -3,6 +3,7 @@ import requests
 from typing import List, Optional, Tuple
 from app.models import Playlist, Track, PlatformEnum
 from app.platforms.base import BasePlatformAdapter
+from app.utils.retry_helper import api_retry, should_retry_exception
 
 logger = logging.getLogger("harmonix.vk")
 
@@ -35,12 +36,22 @@ class VkMusicAdapter(BasePlatformAdapter):
         headers = {"User-Agent": VK_USER_AGENT}
         try:
             res = requests.get(url, params=full_params, headers=headers, timeout=10)
+            if res.status_code == 429:
+                res.raise_for_status()
             data = res.json()
             if "error" in data:
+                err_code = data["error"].get("error_code")
+                if err_code in (6, 9):  # Код 6: Слишком много запросов в секунду, 9: Flood control
+                    raise requests.exceptions.HTTPError(
+                        f"VK rate limit (код {err_code}): {data['error'].get('error_msg')}",
+                        response=res
+                    )
                 logger.warning(f"VK API ошибка {method}: {data['error'].get('error_msg')}")
                 return None
             return data.get("response")
         except Exception as e:
+            if should_retry_exception(e):
+                raise
             logger.error(f"Сетевая ошибка при запросе VK API {method}: {e}")
             return None
 
@@ -141,6 +152,7 @@ class VkMusicAdapter(BasePlatformAdapter):
             return []
         return [self._convert_track(item) for item in resp.get("items", [])]
 
+    @api_retry
     def search_tracks(self, query: str, limit: int = 10) -> List[Track]:
         if not self.is_authenticated():
             return []
@@ -171,6 +183,7 @@ class VkMusicAdapter(BasePlatformAdapter):
             )
         return None
 
+    @api_retry
     def add_tracks_to_playlist(self, playlist_id: str, tracks: List[Track]) -> int:
         if not self.is_authenticated() or not tracks:
             return 0
@@ -193,6 +206,8 @@ class VkMusicAdapter(BasePlatformAdapter):
                     added += 1
             except Exception as e:
                 logger.debug(f"Не удалось добавить трек в VK: {e}")
+                if should_retry_exception(e):
+                    raise
         return added
 
     def get_stream_url(self, track_id: str) -> Optional[str]:
