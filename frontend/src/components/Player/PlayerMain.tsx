@@ -21,6 +21,7 @@ import {
   FileText,
   ArrowUp,
   ArrowDown,
+  TrendingUp,
 } from 'lucide-react';
 import { Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
@@ -55,6 +56,7 @@ import { ArtistCard } from '../Artist/ArtistCard';
 import { AddTrackModal } from '../Track/AddTrackModal';
 import { CreatePlaylistModal } from '../Playlists/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../Playlists/AddToPlaylistModal';
+import { StatsModal } from '../Stats/StatsModal';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 
@@ -108,6 +110,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   // Модальные окна
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   // Музыканты / Исполнители (Artist state)
   const [artistSearchQuery, setArtistSearchQuery] = useState('');
@@ -403,6 +406,14 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
             className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
           >
             <Palette size={18} />
+          </button>
+
+          <button
+            onClick={() => setIsStatsModalOpen(true)}
+            title="Музыкальная статистика (Wrapped)"
+            className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-purple-400 hover:text-purple-300 transition-all active:scale-95 flex items-center justify-center shadow-lg"
+          >
+            <TrendingUp size={18} />
           </button>
 
           <button
@@ -1184,6 +1195,12 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
       <ThemeModal
         isOpen={isThemeModalOpen}
         onClose={() => setIsThemeModalOpen(false)}
+      />
+
+      {/* Модальное окно музыкальной статистики */}
+      <StatsModal
+        isOpen={isStatsModalOpen}
+        onClose={() => setIsStatsModalOpen(false)}
       />
     </div>
   );

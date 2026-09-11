@@ -7,6 +7,7 @@ import { findArtistByName } from '../services/playlistStorage';
 import { BackgroundAudio } from 'capacitor-background-audio';
 import { AudioFocus } from '../plugins/audioFocus';
 import { equalizer } from '../services/audioEqualizer';
+import { recordPlayback } from '../services/statsService';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -113,6 +114,32 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isDuckedRef = useRef<boolean>(false);
   const wasPlayingBeforeTransientRef = useRef<boolean>(false);
 
+  // Статистика прослушиваний
+  const currentTrackRef = useRef<Track | null>(null);
+  const trackPlayStartRef = useRef<number>(0);
+  const trackPlaySecondsRef = useRef<number>(0);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  const flushPlaybackStats = () => {
+    if (trackPlayStartRef.current > 0) {
+      const elapsed = (Date.now() - trackPlayStartRef.current) / 1000;
+      trackPlaySecondsRef.current += elapsed;
+      trackPlayStartRef.current = 0;
+    }
+    if (trackPlaySecondsRef.current >= 15 && currentTrackRef.current) {
+      recordPlayback(
+        currentTrackRef.current.id,
+        currentTrackRef.current.title,
+        currentTrackRef.current.artist,
+        trackPlaySecondsRef.current
+      );
+    }
+    trackPlaySecondsRef.current = 0;
+  };
+
   const openArtist = (artistName: string) => {
     if (!artistName || !artistName.trim()) return;
     const allContextTracks: Track[] = [...queue];
@@ -170,10 +197,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const handleLoadedMetadata = () => setDuration(audio.duration || 0);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      trackPlayStartRef.current = Date.now();
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+      if (trackPlayStartRef.current > 0) {
+        trackPlaySecondsRef.current += (Date.now() - trackPlayStartRef.current) / 1000;
+        trackPlayStartRef.current = 0;
+      }
+    };
     const handleEnded = () => {
       isCrossfadingRef.current = false;
+      flushPlaybackStats();
       // Если включен режим «до конца текущего трека» — останавливаем воспроизведение
       if (sleepTimerOptionRef.current === 'end_of_track') {
         audio.pause();
@@ -371,6 +408,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isPlaying]);
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
+    flushPlaybackStats();
     if (newQueue) {
       setQueue(newQueue);
       if (isShuffle) {
