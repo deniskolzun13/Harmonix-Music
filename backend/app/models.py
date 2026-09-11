@@ -80,3 +80,23 @@ class TransferTask(BaseModel):
     target_playlist_name: Optional[str] = None
     results: List[TransferTrackResult] = Field(default_factory=list)
     message: str = "Задача ожидает запуска"
+
+
+class TransferHistoryItem(BaseModel):
+    task_id: str
+    source_platform: PlatformEnum
+    target_platform: PlatformEnum
+    status: str
+    total_tracks: int = 0
+    matched_tracks: int = 0
+    failed_tracks: int = 0
+    target_playlist_name: Optional[str] = None
+    created_at: float
+    updated_at: float
+
+
+class TransferHistoryResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: List[TransferHistoryItem]

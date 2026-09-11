@@ -16,11 +16,13 @@ from app.models import (
     Playlist,
     Track,
     TransferRequest,
-    TransferTask
+    TransferTask,
+    TransferHistoryResponse
 )
 from app.config import get_local_ip, generate_qr_code_base64, get_allowed_origins
 from app.platforms.manager import manager
 from app.services.transfer_service import transfer_service
+from app.services.transfer_db import get_transfer_history, init_transfer_db, cleanup_old_transfers
 from app.services.audio_proxy import proxy_audio_stream
 from app.services.url_importer import url_importer
 
@@ -42,6 +44,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    """Инициализация базы данных и очистка старых записей переноса (>30 дней)"""
+    init_transfer_db()
+    cleanup_old_transfers(days=30)
 
 
 @app.get("/api/network/info")
@@ -181,6 +190,12 @@ async def stream_audio(platform: PlatformEnum, track_id: str, request: Request):
 async def start_transfer(req: TransferRequest):
     """Запуск задачи миграции треков"""
     return await transfer_service.start_transfer(req)
+
+
+@app.get("/api/transfer/history", response_model=TransferHistoryResponse)
+def get_transfer_history_endpoint(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    """Список прошлых переносов с пагинацией"""
+    return get_transfer_history(limit=limit, offset=offset)
 
 
 @app.get("/api/transfer/status/{task_id}", response_model=TransferTask)

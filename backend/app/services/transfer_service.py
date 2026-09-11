@@ -5,15 +5,31 @@ from typing import Dict, Optional
 from app.models import PlatformEnum, TransferRequest, TransferTask, TransferTrackResult, Track
 from app.platforms.manager import manager
 from app.services.matcher import find_best_match
+from app.services.transfer_db import (
+    init_transfer_db,
+    cleanup_old_transfers,
+    save_task_record,
+    save_track_result,
+    load_task_from_db
+)
 
 logger = logging.getLogger("harmonix.transfer")
 
 class TransferService:
     def __init__(self):
         self.tasks: Dict[str, TransferTask] = {}
+        init_transfer_db()
+        cleanup_old_transfers(days=30)
 
     def get_task(self, task_id: str) -> Optional[TransferTask]:
-        return self.tasks.get(task_id)
+        task = self.tasks.get(task_id)
+        if task is not None:
+            return task
+        db_task = load_task_from_db(task_id)
+        if db_task is not None:
+            self.tasks[task_id] = db_task
+            return db_task
+        return None
 
     async def start_transfer(self, req: TransferRequest) -> TransferTask:
         task_id = str(uuid.uuid4())
@@ -25,6 +41,7 @@ class TransferService:
             message="Получение списка треков из источника..."
         )
         self.tasks[task_id] = task
+        save_task_record(task)
 
         # Запускаем фоновую задачу
         asyncio.create_task(self._run_transfer(task_id, req))
@@ -41,10 +58,12 @@ class TransferService:
             if not source_tracks:
                 task.status = "failed"
                 task.message = "Не удалось найти треки в выбранном плейлисте источника"
+                save_task_record(task)
                 return
 
             task.total = len(source_tracks)
             task.message = f"Найдено {task.total} треков. Подготовка целевого плейлиста..."
+            save_task_record(task)
 
             # 2. Создаем или выбираем целевой плейлист
             pl_name = req.target_playlist_name or f"Перенос: {req.source_platform.value.upper()} в {req.target_platform.value.upper()}"
@@ -59,6 +78,7 @@ class TransferService:
                 target_playlist_id = "favorites"
 
             task.target_playlist_name = pl_name
+            save_task_record(task)
 
             # 3. Сопоставляем каждый трек
             matched_tracks_to_add = []
@@ -94,19 +114,25 @@ class TransferService:
                     task.failed += 1
 
                 task.processed = index
+                save_track_result(task_id, res)
+                save_task_record(task)
+
                 # Микропауза для плавности трансляции прогресса и избежания rate-limit
                 await asyncio.sleep(0.1)
 
             # 4. Добавляем сопоставленные треки в целевой сервис
             task.message = f"Добавление {len(matched_tracks_to_add)} треков в {req.target_platform.value.upper()}..."
+            save_task_record(task)
             added_count = target_adapter.add_tracks_to_playlist(target_playlist_id, matched_tracks_to_add)
 
             task.status = "completed"
             task.message = f"Перенос завершен! Успешно сопоставлено и добавлено {added_count} из {task.total} треков."
+            save_task_record(task)
 
         except Exception as e:
             logger.error(f"Ошибка в процессе переноса: {e}", exc_info=True)
             task.status = "failed"
             task.message = f"Ошибка: {str(e)}"
+            save_task_record(task)
 
 transfer_service = TransferService()

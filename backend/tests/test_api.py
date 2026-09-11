@@ -126,3 +126,73 @@ def test_cors_configuration():
     )
     assert resp_bad.headers.get("access-control-allow-origin") is None
 
+
+def test_transfer_persistence_and_history():
+    import time
+    from app.services.transfer_service import transfer_service
+    from app.services.transfer_db import (
+        save_task_record,
+        save_track_result,
+        cleanup_old_transfers,
+        load_task_from_db
+    )
+    from app.models import TransferTask, TransferTrackResult, Track, PlatformEnum
+
+    # 1. Создаем тестовую задачу
+    test_task_id = f"test-persist-{int(time.time())}"
+    task = TransferTask(
+        task_id=test_task_id,
+        source_platform=PlatformEnum.YANDEX,
+        target_platform=PlatformEnum.SPOTIFY,
+        status="completed",
+        total=1,
+        matched=1,
+        failed=0,
+        processed=1,
+        target_playlist_name="Test Persist PL",
+        message="Тестовый перенос завершен"
+    )
+    save_task_record(task)
+    
+    src_tr = Track(id="src_1", title="Track 1", artist="Artist 1", platform=PlatformEnum.YANDEX)
+    dst_tr = Track(id="dst_1", title="Track 1", artist="Artist 1", platform=PlatformEnum.SPOTIFY)
+    res = TransferTrackResult(source_track=src_tr, matched_track=dst_tr, confidence=95.0, status="matched")
+    save_track_result(test_task_id, res)
+
+    # 2. Симулируем перезапуск бэкенда (удаляем из памяти)
+    transfer_service.tasks.pop(test_task_id, None)
+
+    # 3. Чтение через get_task должно восстановить задачу из SQLite
+    loaded = transfer_service.get_task(test_task_id)
+    assert loaded is not None
+    assert loaded.task_id == test_task_id
+    assert loaded.status == "completed"
+    assert len(loaded.results) == 1
+    assert loaded.results[0].source_track.title == "Track 1"
+    assert loaded.results[0].matched_track.title == "Track 1"
+
+    # 4. Проверяем API истории переносов
+    resp = client.get("/api/transfer/history?limit=10&offset=0")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total" in data
+    assert "items" in data
+    assert any(it["task_id"] == test_task_id for it in data["items"])
+
+    # 5. Проверяем очистку старых записей (>30 дней)
+    old_task_id = "test-old-task-35d"
+    old_task = TransferTask(
+        task_id=old_task_id,
+        source_platform=PlatformEnum.VK,
+        target_platform=PlatformEnum.YANDEX,
+        status="completed"
+    )
+    old_timestamp = time.time() - (35 * 86400)
+    save_task_record(old_task, created_at=old_timestamp, updated_at=old_timestamp)
+    
+    deleted_count = cleanup_old_transfers(days=30)
+    assert deleted_count >= 1
+    assert load_task_from_db(old_task_id) is None
+    # Свежая задача должна остаться
+    assert load_task_from_db(test_task_id) is not None
+
