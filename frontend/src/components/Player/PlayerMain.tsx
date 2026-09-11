@@ -16,6 +16,11 @@ import {
   FolderPlus,
   Mic,
   Plus,
+  Upload,
+  Share2,
+  FileText,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
@@ -37,12 +42,19 @@ import {
   saveImportedPlaylist,
   deleteSavedPlaylist,
   getArtistsList,
+  removeTrackFromPlaylist,
+  moveTrackInPlaylist,
+  exportPlaylistToJson,
+  exportPlaylistToM3u,
+  importPlaylistFromFileContent,
   SavedPlaylistRecord,
 } from '../../services/playlistStorage';
 import { ImportUrlModal } from '../Import/ImportUrlModal';
 import { ThemeModal } from '../Theme/ThemeModal';
 import { ArtistCard } from '../Artist/ArtistCard';
 import { AddTrackModal } from '../Track/AddTrackModal';
+import { CreatePlaylistModal } from '../Playlists/CreatePlaylistModal';
+import { AddToPlaylistModal } from '../Playlists/AddToPlaylistModal';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 
@@ -303,6 +315,30 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     }
   };
 
+  // Пользовательские плейлисты и импорт файлов
+  const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
+  const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
+  const [trackForPlaylist, setTrackForPlaylist] = useState<Track | null>(null);
+  const playlistFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handlePlaylistFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const updated = importPlaylistFromFileContent(text, file.name);
+      setSavedPlaylists(updated);
+      setActivePlaylistId(updated[0]?.playlist.id || '');
+      setActiveTab('playlists');
+    } catch (err: any) {
+      alert('Ошибка при импорте плейлиста: ' + (err.message || err));
+    } finally {
+      if (playlistFileInputRef.current) {
+        playlistFileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Фильтрация треков для отображения
   const sourceTracks = activeTab === 'cached' ? cachedTracks : activeTracks;
   const displayedTracks = filterQuery.trim()
@@ -555,6 +591,24 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                 <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">
                   Сохраненные плейлисты ({savedPlaylists.length})
                 </h2>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => playlistFileInputRef.current?.click()}
+                    title="Импорт плейлиста из файла .M3U или .JSON"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-[11px] font-semibold border border-white/10 transition-colors active:scale-95"
+                  >
+                    <Upload size={12} />
+                    <span>Файл</span>
+                  </button>
+                  <button
+                    onClick={() => setIsCreatePlaylistModalOpen(true)}
+                    title="Создать собственный плейлист"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 text-[11px] font-semibold border border-blue-500/30 transition-colors active:scale-95"
+                  >
+                    <Plus size={12} />
+                    <span>+ Создать</span>
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
                 {savedPlaylists.map((rec) => {
@@ -644,26 +698,46 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                 </div>
               </div>
 
-              {/* Кнопка "Кэшировать всё на телефон" */}
-              <button
-                onClick={handleBulkCacheCurrentPlaylist}
-                disabled={isBulkCaching || activeTracks.length === 0}
-                className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-              >
-                {isBulkCaching ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    <span>
-                      Кэширование на телефон ({bulkCacheProgress?.current} / {bulkCacheProgress?.total})...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={15} />
-                    <span>Кэшировать весь плейлист на телефон</span>
-                  </>
-                )}
-              </button>
+              {/* Кнопки действий: Кэширование и Экспорт */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkCacheCurrentPlaylist}
+                  disabled={isBulkCaching || activeTracks.length === 0}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                  {isBulkCaching ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>
+                        Кэширование ({bulkCacheProgress?.current} / {bulkCacheProgress?.total})...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={15} />
+                      <span>Скачать на телефон</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => exportPlaylistToM3u(activePlaylist.id)}
+                  title="Экспорт плейлиста в файл .M3U8"
+                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all active:scale-95"
+                >
+                  <FileText size={14} className="text-cyan-400" />
+                  <span>.M3U</span>
+                </button>
+
+                <button
+                  onClick={() => exportPlaylistToJson(activePlaylist.id)}
+                  title="Экспорт плейлиста в файл .JSON"
+                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all active:scale-95"
+                >
+                  <Share2 size={14} className="text-purple-400" />
+                  <span>.JSON</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -845,7 +919,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {displayedTracks.map((track) => {
+            {displayedTracks.map((track, trackIdx) => {
               const isCurrent = currentTrack?.id === track.id;
               const isCached = cachedTrackIds.has(track.id);
               const isDownloading = downloadingTrackId === track.id;
@@ -951,6 +1025,57 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                       </button>
                     )}
 
+                    {/* Кнопка "Добавить в плейлист" */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTrackForPlaylist(track);
+                        setIsAddToPlaylistModalOpen(true);
+                      }}
+                      title="Добавить в плейлист"
+                      className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white active:scale-90 transition-all"
+                    >
+                      <FolderPlus size={13} />
+                    </button>
+
+                    {/* Если открыт плейлист: перемещение вверх/вниз и удаление */}
+                    {activeTab === 'playlists' && activePlaylist && (
+                      <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => {
+                            const updated = moveTrackInPlaylist(activePlaylist.id, trackIdx, trackIdx - 1);
+                            setSavedPlaylists(updated);
+                          }}
+                          disabled={trackIdx === 0}
+                          title="Поднять трек выше"
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-white disabled:opacity-20 transition-all active:scale-90"
+                        >
+                          <ArrowUp size={11} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const updated = moveTrackInPlaylist(activePlaylist.id, trackIdx, trackIdx + 1);
+                            setSavedPlaylists(updated);
+                          }}
+                          disabled={trackIdx === displayedTracks.length - 1}
+                          title="Опустить трек ниже"
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-white disabled:opacity-20 transition-all active:scale-90"
+                        >
+                          <ArrowDown size={11} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const updated = removeTrackFromPlaylist(activePlaylist.id, track.id);
+                            setSavedPlaylists(updated);
+                          }}
+                          title="Удалить из этого плейлиста"
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 transition-all active:scale-90"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Кнопка Play/Pause */}
                     <button
                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
@@ -987,6 +1112,42 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         multiple
         accept="audio/*,.mp3,.flac,.wav,.ogg,.m4a,.aac"
         className="hidden"
+      />
+
+      {/* Скрытый input для импорта плейлистов из файла (.json, .m3u, .m3u8) */}
+      <input
+        type="file"
+        ref={playlistFileInputRef}
+        onChange={handlePlaylistFileUpload}
+        accept=".json,.m3u,.m3u8"
+        className="hidden"
+      />
+
+      {/* Модальное окно создания собственного плейлиста */}
+      <CreatePlaylistModal
+        isOpen={isCreatePlaylistModalOpen}
+        onClose={() => setIsCreatePlaylistModalOpen(false)}
+        onCreated={(newId) => {
+          reloadSavedPlaylists();
+          setActivePlaylistId(newId);
+          setActiveTab('playlists');
+        }}
+      />
+
+      {/* Модальное окно добавления трека в плейлист */}
+      <AddToPlaylistModal
+        isOpen={isAddToPlaylistModalOpen}
+        track={trackForPlaylist}
+        onClose={() => {
+          setIsAddToPlaylistModalOpen(false);
+          setTrackForPlaylist(null);
+        }}
+        onCreateNew={() => {
+          setIsCreatePlaylistModalOpen(true);
+        }}
+        onTrackAdded={() => {
+          reloadSavedPlaylists();
+        }}
       />
 
       {/* Модальное окно добавления треков (AddTrackModal) */}

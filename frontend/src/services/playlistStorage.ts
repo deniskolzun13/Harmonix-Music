@@ -443,3 +443,232 @@ export function findArtistByName(
   };
 }
 
+/**
+ * Создает новый пользовательский плейлист
+ */
+export function createCustomPlaylist(title: string, description?: string, coverUrl?: string): SavedPlaylistRecord[] {
+  const current = getSavedPlaylists();
+  const id = `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const newRecord: SavedPlaylistRecord = {
+    playlist: {
+      id,
+      title: title.trim() || 'Мой плейлист',
+      description: description?.trim() || 'Пользовательский плейлист',
+      cover_url: coverUrl?.trim() || undefined,
+      track_count: 0,
+      platform: 'local',
+    },
+    tracks: [],
+    addedAt: Date.now(),
+  };
+  const updated = [newRecord, ...current];
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Ошибка создания плейлиста:', e);
+  }
+  return updated;
+}
+
+/**
+ * Добавляет трек в указанный плейлист
+ */
+export function addTrackToPlaylist(playlistId: string, track: Track): SavedPlaylistRecord[] {
+  const current = getSavedPlaylists();
+  const target = current.find((p) => p.playlist.id === playlistId);
+  if (!target) return current;
+
+  const normalizedTrack: Track = {
+    ...track,
+    stream_url: resolveStreamUrl(track.stream_url),
+  };
+
+  const exists = target.tracks.some((t) => t.id === normalizedTrack.id);
+  if (!exists) {
+    target.tracks.push(normalizedTrack);
+    target.playlist.track_count = target.tracks.length;
+    if (!target.playlist.cover_url && normalizedTrack.cover_url) {
+      target.playlist.cover_url = normalizedTrack.cover_url;
+    }
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error('Ошибка добавления трека в плейлист:', e);
+  }
+  return current;
+}
+
+/**
+ * Удаляет трек из плейлиста
+ */
+export function removeTrackFromPlaylist(playlistId: string, trackId: string): SavedPlaylistRecord[] {
+  const current = getSavedPlaylists();
+  const target = current.find((p) => p.playlist.id === playlistId);
+  if (!target) return current;
+
+  target.tracks = target.tracks.filter((t) => t.id !== trackId);
+  target.playlist.track_count = target.tracks.length;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error('Ошибка удаления трека из плейлиста:', e);
+  }
+  return current;
+}
+
+/**
+ * Изменяет порядок треков в плейлисте (перемещение вверх/вниз)
+ */
+export function moveTrackInPlaylist(playlistId: string, fromIndex: number, toIndex: number): SavedPlaylistRecord[] {
+  const current = getSavedPlaylists();
+  const target = current.find((p) => p.playlist.id === playlistId);
+  if (!target || fromIndex < 0 || toIndex < 0 || fromIndex >= target.tracks.length || toIndex >= target.tracks.length) {
+    return current;
+  }
+
+  const [movedTrack] = target.tracks.splice(fromIndex, 1);
+  target.tracks.splice(toIndex, 0, movedTrack);
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error('Ошибка изменения порядка треков:', e);
+  }
+  return current;
+}
+
+/**
+ * Экспорт плейлиста в JSON файл
+ */
+export function exportPlaylistToJson(playlistId: string): void {
+  const current = getSavedPlaylists();
+  const target = current.find((p) => p.playlist.id === playlistId);
+  if (!target) return;
+
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(target, null, 2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute('href', dataStr);
+  dlAnchor.setAttribute('download', `${target.playlist.title.replace(/[\\/:*?"<>|]/g, '_')}.json`);
+  dlAnchor.click();
+}
+
+/**
+ * Экспорт плейлиста в файл формата .M3U8
+ */
+export function exportPlaylistToM3u(playlistId: string): void {
+  const current = getSavedPlaylists();
+  const target = current.find((p) => p.playlist.id === playlistId);
+  if (!target) return;
+
+  let m3uContent = '#EXTM3U\n';
+  m3uContent += `#PLAYLIST:${target.playlist.title}\n\n`;
+
+  for (const t of target.tracks) {
+    m3uContent += `#EXTINF:${t.duration || -1},${t.artist} - ${t.title}\n`;
+    m3uContent += `${t.stream_url || ''}\n`;
+  }
+
+  const dataStr = 'data:audio/x-mpegurl;charset=utf-8,' + encodeURIComponent(m3uContent);
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute('href', dataStr);
+  dlAnchor.setAttribute('download', `${target.playlist.title.replace(/[\\/:*?"<>|]/g, '_')}.m3u8`);
+  dlAnchor.click();
+}
+
+/**
+ * Импорт плейлиста из содержимого файла (JSON или M3U)
+ */
+export function importPlaylistFromFileContent(text: string, fileName: string): SavedPlaylistRecord[] {
+  const current = getSavedPlaylists();
+  let newRecord: SavedPlaylistRecord | null = null;
+
+  try {
+    const json = JSON.parse(text);
+    if (json && json.playlist && Array.isArray(json.tracks)) {
+      const id = `imported_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      newRecord = {
+        playlist: {
+          ...json.playlist,
+          id,
+          title: json.playlist.title || fileName.replace(/\.[^/.]+$/, ''),
+        },
+        tracks: json.tracks.map((t: Track) => ({ ...t, stream_url: resolveStreamUrl(t.stream_url) })),
+        addedAt: Date.now(),
+      };
+    }
+  } catch {}
+
+  if (!newRecord && (text.includes('#EXTM3U') || text.includes('#EXTINF') || fileName.endsWith('.m3u') || fileName.endsWith('.m3u8'))) {
+    const lines = text.split(/\r?\n/);
+    let playlistTitle = fileName.replace(/\.[^/.]+$/, '');
+    const tracks: Track[] = [];
+
+    let curArtist = 'Неизвестный исполнитель';
+    let curTitle = 'Без названия';
+    let curDuration = 0;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      if (line.startsWith('#PLAYLIST:')) {
+        playlistTitle = line.replace('#PLAYLIST:', '').trim();
+      } else if (line.startsWith('#EXTINF:')) {
+        const afterColon = line.replace('#EXTINF:', '').trim();
+        const commaIdx = afterColon.indexOf(',');
+        if (commaIdx >= 0) {
+          curDuration = parseInt(afterColon.slice(0, commaIdx), 10) || 0;
+          const namePart = afterColon.slice(commaIdx + 1).trim();
+          const dashIdx = namePart.indexOf(' - ');
+          if (dashIdx >= 0) {
+            curArtist = namePart.slice(0, dashIdx).trim();
+            curTitle = namePart.slice(dashIdx + 3).trim();
+          } else {
+            curTitle = namePart;
+          }
+        }
+      } else if (!line.startsWith('#')) {
+        const trackId = `m3u_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        tracks.push({
+          id: trackId,
+          title: curTitle,
+          artist: curArtist,
+          duration: curDuration,
+          stream_url: resolveStreamUrl(line),
+          platform: 'local',
+          is_playable: true,
+        });
+        curArtist = 'Неизвестный исполнитель';
+        curTitle = 'Без названия';
+        curDuration = 0;
+      }
+    }
+
+    if (tracks.length > 0) {
+      newRecord = {
+        playlist: {
+          id: `m3u_pl_${Date.now()}`,
+          title: playlistTitle,
+          description: `Импортировано из файла ${fileName}`,
+          track_count: tracks.length,
+          platform: 'local',
+        },
+        tracks,
+        addedAt: Date.now(),
+      };
+    }
+  }
+
+  if (newRecord) {
+    const updated = [newRecord, ...current];
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+    return updated;
+  }
+
+  throw new Error('Не удалось распознать формат плейлиста. Поддерживаются JSON и M3U/M3U8.');
+}
+
