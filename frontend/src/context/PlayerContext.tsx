@@ -373,6 +373,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const playTrack = (track: Track, newQueue?: Track[]) => {
     if (newQueue) {
       setQueue(newQueue);
+      if (isShuffle) {
+        shuffleQueueRef.current = generateSmartShuffleQueue(newQueue, track.id);
+        shufflePointerRef.current = 0;
+      }
     } else if (!queue.some((t) => t.id === track.id)) {
       setQueue((prev) => [...prev, track]);
     }
@@ -436,21 +440,66 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const nextTrack = () => {
-    if (!queue.length || !currentTrack) return;
-    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-    let nextIndex = 0;
+function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Track[] {
+  if (tracks.length <= 1) return [...tracks];
+  const pool = tracks.filter((t) => t.id !== currentTrackId);
 
-    if (isShuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length);
-    } else {
-      nextIndex = currentIndex + 1;
-      if (nextIndex >= queue.length) {
-        if (repeatMode === 'all') nextIndex = 0;
-        else return; // Очередь закончилась
+  // 1. Алгоритм Fisher-Yates
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  // 2. Распределение по артистам (чтобы один исполнитель не шел подряд)
+  const result: Track[] = [];
+  while (pool.length > 0) {
+    const lastArtist = result.length > 0 ? result[result.length - 1].artist.toLowerCase() : null;
+    let chosenIdx = -1;
+
+    for (let i = 0; i < pool.length; i++) {
+      if (!lastArtist || pool[i].artist.toLowerCase() !== lastArtist) {
+        chosenIdx = i;
+        break;
       }
     }
 
+    if (chosenIdx === -1) chosenIdx = 0;
+    result.push(pool.splice(chosenIdx, 1)[0]);
+  }
+
+  return result;
+}
+
+  const shuffleQueueRef = useRef<Track[]>([]);
+  const shufflePointerRef = useRef<number>(0);
+
+  const nextTrack = () => {
+    if (!queue.length || !currentTrack) return;
+
+    if (isShuffle) {
+      if (shufflePointerRef.current < shuffleQueueRef.current.length) {
+        const nextT = shuffleQueueRef.current[shufflePointerRef.current++];
+        playTrack(nextT);
+        return;
+      } else if (repeatMode === 'all') {
+        shuffleQueueRef.current = generateSmartShuffleQueue(queue, currentTrack.id);
+        shufflePointerRef.current = 0;
+        if (shuffleQueueRef.current.length > 0) {
+          const nextT = shuffleQueueRef.current[shufflePointerRef.current++];
+          playTrack(nextT);
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= queue.length) {
+      if (repeatMode === 'all') nextIndex = 0;
+      else return; // Очередь закончилась
+    }
     playTrack(queue[nextIndex]);
   };
 
@@ -463,6 +512,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     if (!queue.length || !currentTrack) return;
+
+    if (isShuffle && shufflePointerRef.current > 1) {
+      shufflePointerRef.current -= 2;
+      const prevT = shuffleQueueRef.current[shufflePointerRef.current++];
+      playTrack(prevT);
+      return;
+    }
+
     const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
     let prevIndex = currentIndex - 1;
     if (prevIndex < 0) {
@@ -487,7 +544,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const toggleShuffle = () => setIsShuffle((prev) => !prev);
+  const toggleShuffle = () => {
+    setIsShuffle((prev) => {
+      const next = !prev;
+      if (next && queue.length > 0) {
+        shuffleQueueRef.current = generateSmartShuffleQueue(queue, currentTrack?.id);
+        shufflePointerRef.current = 0;
+      }
+      return next;
+    });
+  };
 
   const toggleRepeat = () => {
     setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'));

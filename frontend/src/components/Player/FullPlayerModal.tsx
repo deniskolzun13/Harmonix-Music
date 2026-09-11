@@ -25,6 +25,7 @@ import { LyricsView } from './LyricsView';
 import { AudioVisualizer } from './AudioVisualizer';
 import { SleepTimerModal } from './SleepTimerModal';
 import { EqualizerModal } from './EqualizerModal';
+import { extractCoverPalette, ExtractedPalette } from '../../services/colorExtractor';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -72,6 +73,17 @@ export const FullPlayerModal: React.FC = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
+
+  // Адаптивный цвет фона под обложку
+  const [palette, setPalette] = useState<ExtractedPalette | null>(null);
+
+  useEffect(() => {
+    if (currentTrack?.cover_url) {
+      extractCoverPalette(currentTrack.cover_url).then(setPalette);
+    } else {
+      setPalette(null);
+    }
+  }, [currentTrack?.cover_url]);
 
   // Обработка системного жеста "Назад" для очереди, текста, визуализатора и плеера
   useBackNavigation('player_visualizer', isFullPlayerOpen && showVisualizer, () => setShowVisualizer(false), 68);
@@ -206,14 +218,23 @@ export const FullPlayerModal: React.FC = () => {
       }}
       className={`fixed inset-0 z-50 flex flex-col bg-[#0d0f15] text-white select-none ${pointerEventsClass}`}
     >
+      {/* Адаптивный живой градиент под цвета обложки */}
+      <div
+        className="absolute inset-0 pointer-events-none transition-all duration-1000 ease-in-out"
+        style={{
+          background: palette
+            ? `radial-gradient(circle at 50% 30%, ${palette.primary} 0%, ${palette.secondary} 48%, #0d0f15 88%)`
+            : undefined,
+        }}
+      />
       {/* Размытый фоновый цвет от обложки */}
       {currentTrack.cover_url && (
         <div
-          className="absolute inset-0 opacity-25 filter blur-3xl pointer-events-none bg-cover bg-center transition-all duration-700"
+          className="absolute inset-0 opacity-20 filter blur-3xl pointer-events-none bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTrack.cover_url})` }}
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d0f15]/80 to-[#0d0f15] pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d0f15]/75 to-[#0d0f15] pointer-events-none" />
 
       {/* Верхняя ручка для свайпа вниз (Drag Indicator) */}
       <div
