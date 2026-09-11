@@ -312,7 +312,7 @@ export const AccountsModal: React.FC = () => {
 
   // --- Spotify Handlers ---
   const handleOpenSpotifyOAuth = () => {
-    window.open('https://developer.spotify.com/get-token', '_blank');
+    window.open('https://developer.spotify.com/dashboard', '_blank');
   };
 
   const handleSaveSpotifyToken = async (e?: React.FormEvent) => {
@@ -638,9 +638,22 @@ export const AccountsModal: React.FC = () => {
                 <ExternalLink size={16} />
                 <span>1. Авторизоваться ВКонтакте (Kate Mobile)</span>
               </button>
-              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                Нажмите кнопку, разрешите доступ и скопируйте адрес страницы (или токен) в поле ниже:
-              </p>
+
+              {/* Пошаговая подсказка о белой странице blank.html */}
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-3 text-[11px] text-blue-200 space-y-1.5">
+                <p className="font-bold text-blue-300 flex items-center gap-1.5">
+                  <span>💡 Что делать после нажатия кнопки:</span>
+                </p>
+                <p className="leading-snug">
+                  1. В браузере откроется белая страница <code className="bg-blue-900/40 px-1 rounded text-blue-300">blank.html</code> с предупреждением — <b>это не ошибка, авторизация прошла успешно!</b>
+                </p>
+                <p className="leading-snug">
+                  2. <b>Скопируйте адрес страницы целиком из адресной строки браузера</b> (в ней находится ваш токен <code className="bg-blue-900/40 px-1 rounded text-blue-300">#access_token=...</code>).
+                </p>
+                <p className="leading-snug">
+                  3. Вставьте скопированную ссылку в поле ниже и нажмите кнопку сохранения (дискетка).
+                </p>
+              </div>
 
               <form onSubmit={handleSaveVkToken} className="flex gap-2">
                 <div className="relative flex-1">
@@ -739,14 +752,29 @@ export const AccountsModal: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={handleOpenSpotifyOAuth}
-                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 hover:opacity-95 active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
-              >
-                <ExternalLink size={16} />
-                <span>Получить токен Spotify в 1 клик</span>
-              </button>
+              {/* Подсказка о работе Spotify без токена */}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 text-[11px] text-emerald-200 space-y-1.5">
+                <p className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <span>✨ Spotify работает без авторизации!</span>
+                </p>
+                <p className="leading-snug">
+                  Вы можете просто вставлять любые ссылки на плейлисты, альбомы или треки Spotify на главном экране через <b>«+ Ссылка»</b> или кнопку <b>«+ Трек»</b> — треки загружаются напрямую без ввода токенов!
+                </p>
+              </div>
+
+              <div className="pt-1">
+                <p className="text-[11px] text-gray-400 mb-2">
+                  Для доступа к приватным плейлистам вставьте токен из Spotify Dashboard:
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenSpotifyOAuth}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-98 text-white font-medium text-xs flex items-center justify-center gap-2 border border-white/10 transition-all mb-2"
+                >
+                  <ExternalLink size={15} />
+                  <span>Открыть Spotify Developer Dashboard</span>
+                </button>
+              </div>
 
               <form onSubmit={handleSaveSpotifyToken} className="flex gap-2">
                 <div className="relative flex-1">
