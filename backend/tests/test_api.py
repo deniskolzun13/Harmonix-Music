@@ -71,3 +71,27 @@ def test_download_apk():
     assert resp.headers["content-type"] == "application/vnd.android.package-archive"
     assert len(resp.content) > 1000000  # Больше 1 МБ
 
+
+def test_encrypted_auth_config():
+    # Проверка безопасного шифрования токенов авторизации
+    from app.config import save_auth_config, load_auth_config, AUTH_FILE
+    from app.models import AuthConfig
+
+    original = load_auth_config()
+    try:
+        test_cfg = AuthConfig(yandex_token="super_secret_token_abc_123", vk_token="secret_vk_789")
+        save_auth_config(test_cfg)
+
+        # 1. Проверяем, что на диске нет токена в открытом виде
+        raw_bytes = AUTH_FILE.read_bytes()
+        assert b"super_secret_token_abc_123" not in raw_bytes
+        assert b"secret_vk_789" not in raw_bytes
+
+        # 2. Проверяем успешную дешифровку
+        loaded = load_auth_config()
+        assert loaded.yandex_token == "super_secret_token_abc_123"
+        assert loaded.vk_token == "secret_vk_789"
+    finally:
+        # Восстанавливаем исходную конфигурацию
+        save_auth_config(original)
+

@@ -9,3 +9,4 @@ pillow>=10.2.0
 python-multipart>=0.0.9
 yandex-music>=2.2.0
 spotipy>=2.23.0
+cryptography>=42.0.0

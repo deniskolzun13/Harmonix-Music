@@ -2,6 +2,9 @@
 backend/data/auth_config.json
 backend/data/*.json
 !backend/data/auth_config.example.json
+.secret_key
+backend/data/.secret_key
+backend/data/*.db
 *.env
 *.env.*
 !.env.example
