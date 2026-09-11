@@ -44,6 +44,7 @@ import { ThemeModal } from '../Theme/ThemeModal';
 import { ArtistCard } from '../Artist/ArtistCard';
 import { ArtistDetailModal } from '../Artist/ArtistDetailModal';
 import { AddTrackModal } from '../Track/AddTrackModal';
+import { useBackNavigation } from '../../services/backNavigation';
 
 function formatDuration(sec: number): string {
   if (!sec) return '0:00';
@@ -64,7 +65,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
   const hasYandexToken = Boolean(localStorage.getItem('harmonix_yandex_token'));
 
-  // Вкладка библиотеки: "Мои плейлисты" или "Скачанные на телефон"
+  // Вкладка библиотеки: "Мои плейлисты", "Музыканты" или "Скачанные на телефон"
   const [activeTab, setActiveTab] = useState<LibraryTab>('playlists');
 
   // Сохраненные плейлисты (импортированные по ссылке)
@@ -104,6 +105,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   // Модальное окно добавления трека (локальный файл / ссылка / вручную)
   const [isAddTrackModalOpen, setIsAddTrackModalOpen] = useState(false);
   const [addTrackDefaultArtist, setAddTrackDefaultArtist] = useState<string | undefined>(undefined);
+
+  // Перехват системного жеста "Назад" для модальных окон и вкладок
+  useBackNavigation('add_track_modal', isAddTrackModalOpen, () => setIsAddTrackModalOpen(false), 45);
+  useBackNavigation('artist_modal', isArtistModalOpen, () => setIsArtistModalOpen(false), 35);
+  useBackNavigation('import_modal', isImportModalOpen, () => setIsImportModalOpen(false), 30);
+  useBackNavigation('theme_modal', isThemeModalOpen, () => setIsThemeModalOpen(false), 25);
+  useBackNavigation('library_tab', activeTab !== 'playlists', () => setActiveTab('playlists'), 15);
 
   // Загрузка сохраненных плейлистов из памяти
   const reloadSavedPlaylists = () => {

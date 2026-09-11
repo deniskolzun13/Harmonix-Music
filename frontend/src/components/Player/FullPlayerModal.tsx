@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
+import { useBackNavigation } from '../../services/backNavigation';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -47,6 +48,10 @@ export const FullPlayerModal: React.FC = () => {
 
   const [showQueue, setShowQueue] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+
+  // Обработка системного жеста "Назад" для очереди и плеера
+  useBackNavigation('player_queue', isFullPlayerOpen && showQueue, () => setShowQueue(false), 60);
+  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue, () => setIsFullPlayerOpen(false), 50);
 
   // Анимация перелистывания треков: 'next' | 'prev' | null
   const [switchAnim, setSwitchAnim] = useState<'next' | 'prev' | null>(null);

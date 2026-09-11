@@ -6,11 +6,15 @@ import { MiniPlayer } from './components/Player/MiniPlayer';
 import { FullPlayerModal } from './components/Player/FullPlayerModal';
 import { PlayerMain } from './components/Player/PlayerMain';
 import { AccountsModal } from './components/Settings/AccountsModal';
+import { useBackNavigation } from './services/backNavigation';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('player');
   const { theme } = useTheme();
   const { currentTrack } = usePlayer();
+
+  // При жесте "Назад" со вкладки настроек возвращаемся на плеер
+  useBackNavigation('app_settings_tab', activeTab === 'settings', () => setActiveTab('player'), 5);
 
   return (
     <div className="h-full w-full relative text-white flex flex-col overflow-hidden select-none transition-colors duration-500">
