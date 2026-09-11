@@ -68,8 +68,16 @@ export interface TransferTask {
   target_playlist_url?: string;
   target_playlist_name?: string;
   target_playlist_id?: string;
+  created_at?: string;
   results: TransferTrackResult[];
   message: string;
+}
+
+export interface TransferHistoryResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  items: TransferTask[];
 }
 
 export interface ArtistSummary {

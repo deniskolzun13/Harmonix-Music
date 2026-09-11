@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Music2, Link2, CheckSquare, Square } from 'lucide-react';
+import { ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Music2, Link2, CheckSquare, Square, History } from 'lucide-react';
 import { Platform, Playlist, TransferTask } from '../../types';
 import { getPlaylists, startTransfer, getTransferStatus, confirmTransfer, rejectTransfer } from '../../api';
 import { ImportUrlModal } from '../Import/ImportUrlModal';
+import { TransferHistoryModal } from './TransferHistoryModal';
 
 export const TransferHub: React.FC = () => {
   const [sourcePlatform, setSourcePlatform] = useState<Platform>('yandex');
@@ -16,6 +17,7 @@ export const TransferHub: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Загружаем плейлисты выбранного источника
   useEffect(() => {
@@ -147,13 +149,23 @@ export const TransferHub: React.FC = () => {
             <p className="text-xs text-gray-400">Миграция треков между Яндекс, VK и Spotify</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsImportModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#151821] hover:bg-white/10 border border-white/10 text-white text-xs font-bold transition-all active:scale-95"
-        >
-          <Link2 size={15} />
-          <span>По ссылке</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#151821] hover:bg-white/10 border border-white/10 text-white text-xs font-bold transition-all active:scale-95"
+            title="История прошлых переносов"
+          >
+            <History size={15} className="text-blue-400" />
+            <span>История</span>
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#151821] hover:bg-white/10 border border-white/10 text-white text-xs font-bold transition-all active:scale-95"
+          >
+            <Link2 size={15} />
+            <span>По ссылке</span>
+          </button>
+        </div>
       </div>
 
       {/* Выбор Откуда ➔ Куда */}
@@ -460,6 +472,13 @@ export const TransferHub: React.FC = () => {
       <ImportUrlModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+      />
+
+      {/* Модальное окно истории переносов */}
+      <TransferHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectTask={(task) => setActiveTask(task)}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { AuthConfig, AuthStatus, NetworkInfo, Playlist, Track, TransferTask, Platform } from './types';
+import { AuthConfig, AuthStatus, NetworkInfo, Playlist, Track, TransferTask, TransferHistoryResponse, Platform } from './types';
 import { importPlaylistStandalone } from './services/standaloneImporter';
 
 export function isNativeMobile(): boolean {
@@ -139,6 +139,23 @@ export async function rejectTransfer(taskId: string): Promise<TransferTask> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Ошибка отклонения' }));
     throw new Error(err.detail || 'Не удалось отклонить треки');
+  }
+  return res.json();
+}
+
+export async function getTransferHistory(
+  status?: string,
+  limit: number = 30,
+  offset: number = 0
+): Promise<TransferHistoryResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+    ...(status ? { status } : {}),
+  });
+  const res = await fetch(`${getApiBase()}/transfer/history?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Не удалось загрузить историю переносов: HTTP ${res.status}`);
   }
   return res.json();
 }
