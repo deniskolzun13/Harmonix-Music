@@ -14,13 +14,15 @@ import {
   Heart,
   Mic2,
   Moon,
-  Sliders
+  Sliders,
+  Activity,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 import { LyricsView } from './LyricsView';
+import { AudioVisualizer } from './AudioVisualizer';
 import { SleepTimerModal } from './SleepTimerModal';
 import { EqualizerModal } from './EqualizerModal';
 
@@ -57,23 +59,33 @@ export const FullPlayerModal: React.FC = () => {
 
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showVisualizer, setShowVisualizer] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
 
-  // Обработка системного жеста "Назад" для очереди, текста и плеера
+  // Обработка системного жеста "Назад" для очереди, текста, визуализатора и плеера
+  useBackNavigation('player_visualizer', isFullPlayerOpen && showVisualizer, () => setShowVisualizer(false), 68);
   useBackNavigation('player_lyrics', isFullPlayerOpen && showLyrics, () => setShowLyrics(false), 65);
   useBackNavigation('player_queue', isFullPlayerOpen && showQueue, () => setShowQueue(false), 60);
-  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue && !showLyrics, () => setIsFullPlayerOpen(false), 50);
+  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue && !showLyrics && !showVisualizer, () => setIsFullPlayerOpen(false), 50);
+
+  const toggleVisualizer = () => {
+    setShowVisualizer((prev) => !prev);
+    if (showLyrics) setShowLyrics(false);
+    if (showQueue) setShowQueue(false);
+  };
 
   const toggleLyrics = () => {
     setShowLyrics((prev) => !prev);
     if (showQueue) setShowQueue(false);
+    if (showVisualizer) setShowVisualizer(false);
   };
 
   const toggleQueue = () => {
     setShowQueue((prev) => !prev);
     if (showLyrics) setShowLyrics(false);
+    if (showVisualizer) setShowVisualizer(false);
   };
 
   // Анимация перелистывания треков: 'next' | 'prev' | null
@@ -263,6 +275,20 @@ export const FullPlayerModal: React.FC = () => {
             <Mic2 size={20} />
           </button>
 
+          {/* Кнопка живого визуализатора звука */}
+          <button
+            onClick={toggleVisualizer}
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+              showVisualizer
+                ? 'bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-cyan-500/30 ring-2 ring-cyan-400/50'
+                : 'text-gray-200 hover:text-white bg-white/10'
+            }`}
+            aria-label="Живой визуализатор звука"
+            title="Живой визуализатор звука (Спектр / Волна)"
+          >
+            <Activity size={20} />
+          </button>
+
           {/* Кнопка очереди */}
           <button
             onClick={toggleQueue}
@@ -277,7 +303,7 @@ export const FullPlayerModal: React.FC = () => {
         </div>
       </div>
 
-      {/* Основной контент (Обложка со свайпом, Очередь или Караоке) */}
+      {/* Основной контент (Обложка со свайпом, Очередь, Караоке или Визуализатор) */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 min-h-0">
         {showQueue ? (
           /* Список очередей */
@@ -313,6 +339,11 @@ export const FullPlayerModal: React.FC = () => {
             currentTime={currentTime}
             onSeek={seek}
           />
+        ) : showVisualizer ? (
+          /* Живой аудио-визуализатор спектра и волны */
+          <div className="w-full max-w-[320px] aspect-square rounded-3xl overflow-hidden p-3 bg-black/40 border border-white/10 backdrop-blur-xl shadow-2xl my-auto animate-fadeIn">
+            <AudioVisualizer isPlaying={isPlaying} />
+          </div>
         ) : (
           /* Крупная обложка с поддержкой свайпов влево/вправо */
           <div

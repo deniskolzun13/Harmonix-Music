@@ -1,4 +1,4 @@
-﻿// 5-полосный эквалайзер и Bass Boost на Web Audio API
+// 5-полосный эквалайзер и Bass Boost на Web Audio API
 
 export interface EqualizerBand {
   frequency: number;
@@ -38,6 +38,7 @@ interface EqualizerState {
   presetId: string;
   gains: number[];
   bassBoost: number;
+  normalization: boolean;
 }
 
 function loadSavedState(): EqualizerState {
@@ -50,6 +51,7 @@ function loadSavedState(): EqualizerState {
     presetId: 'flat',
     gains: [0, 0, 0, 0, 0],
     bassBoost: 0,
+    normalization: false,
   };
 }
 
@@ -64,6 +66,8 @@ class EqualizerManager {
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
   private bassBoostNode: BiquadFilterNode | null = null;
+  private compressorNode: DynamicsCompressorNode | null = null;
+  private analyserNode: AnalyserNode | null = null;
   private isConnected = false;
 
   private state: EqualizerState = loadSavedState();
@@ -97,7 +101,20 @@ class EqualizerManager {
         return node;
       });
 
-      // 3. Соединяем цепочку: Source -> BassBoost -> Filter[0] -> Filter[1]... -> Destination
+      // 3. Создаем DynamicsCompressorNode для нормализации громкости
+      this.compressorNode = this.audioCtx.createDynamicsCompressor();
+      this.compressorNode.threshold.value = this.state.normalization ? -24 : 0;
+      this.compressorNode.knee.value = 30;
+      this.compressorNode.ratio.value = this.state.normalization ? 12 : 1;
+      this.compressorNode.attack.value = 0.003;
+      this.compressorNode.release.value = 0.25;
+
+      // 4. Создаем AnalyserNode для живого спектроанализатора
+      this.analyserNode = this.audioCtx.createAnalyser();
+      this.analyserNode.fftSize = 128;
+      this.analyserNode.smoothingTimeConstant = 0.82;
+
+      // 5. Соединяем цепочку: Source -> BassBoost -> Filter[0..4] -> Compressor -> Analyser -> Destination
       let lastNode: AudioNode = this.sourceNode;
       lastNode.connect(this.bassBoostNode);
       lastNode = this.bassBoostNode;
@@ -107,7 +124,9 @@ class EqualizerManager {
         lastNode = filter;
       }
 
-      lastNode.connect(this.audioCtx.destination);
+      lastNode.connect(this.compressorNode);
+      this.compressorNode.connect(this.analyserNode);
+      this.analyserNode.connect(this.audioCtx.destination);
       this.isConnected = true;
 
       // Возобновление AudioContext при воспроизведении
@@ -183,6 +202,36 @@ class EqualizerManager {
       }
     }
     saveState(this.state);
+  }
+
+  public setNormalization(enabled: boolean) {
+    this.state.normalization = enabled;
+    if (this.compressorNode && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this.compressorNode.threshold.setTargetAtTime(enabled ? -24 : 0, now, 0.05);
+      this.compressorNode.ratio.setTargetAtTime(enabled ? 12 : 1, now, 0.05);
+    }
+    saveState(this.state);
+  }
+
+  public getAnalyser(): AnalyserNode | null {
+    return this.analyserNode;
+  }
+
+  public getAudioContext(): AudioContext | null {
+    return this.audioCtx;
+  }
+
+  public getByteFrequencyData(array: Uint8Array<any>): void {
+    if (this.analyserNode) {
+      this.analyserNode.getByteFrequencyData(array as any);
+    }
+  }
+
+  public getByteTimeDomainData(array: Uint8Array<any>): void {
+    if (this.analyserNode) {
+      this.analyserNode.getByteTimeDomainData(array as any);
+    }
   }
 }
 
