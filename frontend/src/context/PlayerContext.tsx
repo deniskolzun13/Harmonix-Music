@@ -4,6 +4,7 @@ import { getCachedTrackAudioUrl } from '../services/cacheManager';
 import { getDirectYmAudioUrl } from '../services/standaloneImporter';
 import { getServerUrl } from '../api';
 import { findArtistByName } from '../services/playlistStorage';
+import { BackgroundAudio } from 'capacitor-background-audio';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -139,6 +140,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
   }, [isPlaying]);
+
+  // Управление нативным foreground service для фонового воспроизведения на Android
+  useEffect(() => {
+    if (isPlaying && currentTrack) {
+      BackgroundAudio.enable({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+      }).catch((err) => {
+        console.warn('BackgroundAudio enable error:', err);
+      });
+    } else {
+      BackgroundAudio.disable().catch((err) => {
+        console.warn('BackgroundAudio disable error:', err);
+      });
+    }
+
+    return () => {
+      BackgroundAudio.disable().catch(() => {});
+    };
+  }, [isPlaying, currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
     if (newQueue) {

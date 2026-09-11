@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+    BackgroundAudio: {
+      enabled: true,
+    },
   },
 };
 
