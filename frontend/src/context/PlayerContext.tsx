@@ -5,6 +5,7 @@ import { getDirectYmAudioUrl } from '../services/standaloneImporter';
 import { getServerUrl } from '../api';
 import { findArtistByName } from '../services/playlistStorage';
 import { BackgroundAudio } from 'capacitor-background-audio';
+import { AudioFocus } from '../plugins/audioFocus';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -47,6 +48,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const savedVolumeRef = useRef<number>(1.0);
+  const isDuckedRef = useRef<boolean>(false);
+  const wasPlayingBeforeTransientRef = useRef<boolean>(false);
 
   const openArtist = (artistName: string) => {
     if (!artistName || !artistName.trim()) return;
@@ -161,6 +165,71 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [isPlaying, currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
 
+  // Управление Audio Focus на Android (входящие звонки, голосовые подсказки, сторонние плееры)
+  useEffect(() => {
+    let lossHandle: { remove: () => void } | null = null;
+    let transHandle: { remove: () => void } | null = null;
+    let duckHandle: { remove: () => void } | null = null;
+    let gainHandle: { remove: () => void } | null = null;
+
+    const setupListeners = async () => {
+      // AUDIOFOCUS_LOSS: полная потеря фокуса (запуск другого плеера)
+      lossHandle = await AudioFocus.addListener('audioFocusLoss', () => {
+        wasPlayingBeforeTransientRef.current = false;
+        audioRef.current?.pause();
+      });
+
+      // AUDIOFOCUS_LOSS_TRANSIENT: временная потеря (входящий телефонный звонок)
+      transHandle = await AudioFocus.addListener('audioFocusLossTransient', () => {
+        if (audioRef.current && !audioRef.current.paused) {
+          wasPlayingBeforeTransientRef.current = true;
+          audioRef.current.pause();
+        }
+      });
+
+      // AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: приглушение звука (навигатор / системный звук)
+      duckHandle = await AudioFocus.addListener('audioFocusCanDuck', () => {
+        isDuckedRef.current = true;
+        if (audioRef.current) {
+          audioRef.current.volume = Math.min(0.2, savedVolumeRef.current * 0.2);
+        }
+      });
+
+      // AUDIOFOCUS_GAIN: фокус возвращен
+      gainHandle = await AudioFocus.addListener('audioFocusGain', () => {
+        if (isDuckedRef.current) {
+          isDuckedRef.current = false;
+          if (audioRef.current) {
+            audioRef.current.volume = savedVolumeRef.current;
+          }
+        }
+        if (wasPlayingBeforeTransientRef.current) {
+          wasPlayingBeforeTransientRef.current = false;
+          audioRef.current?.play().catch(console.error);
+        }
+      });
+    };
+
+    setupListeners().catch(console.warn);
+
+    return () => {
+      lossHandle?.remove();
+      transHandle?.remove();
+      duckHandle?.remove();
+      gainHandle?.remove();
+      AudioFocus.abandonAudioFocus().catch(() => {});
+    };
+  }, []);
+
+  // Запрос / освобождение Audio Focus в зависимости от воспроизведения
+  useEffect(() => {
+    if (isPlaying) {
+      AudioFocus.requestAudioFocus().catch(console.warn);
+    } else if (!wasPlayingBeforeTransientRef.current) {
+      AudioFocus.abandonAudioFocus().catch(console.warn);
+    }
+  }, [isPlaying]);
+
   const playTrack = (track: Track, newQueue?: Track[]) => {
     if (newQueue) {
       setQueue(newQueue);
@@ -250,8 +319,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const setVolume = (val: number) => {
     const clamped = Math.max(0, Math.min(1, val));
     setVolumeState(clamped);
+    savedVolumeRef.current = clamped;
     if (audioRef.current) {
-      audioRef.current.volume = clamped;
+      audioRef.current.volume = isDuckedRef.current ? Math.min(0.2, clamped * 0.2) : clamped;
     }
   };
 
