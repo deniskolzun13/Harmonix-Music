@@ -4,10 +4,26 @@
 
 @layer utilities {
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 16px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
   .pt-safe {
-    padding-top: env(safe-area-inset-top, 16px);
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 38px) + 16px);
+  }
+  /* Верхний отступ для основного экрана и экранов со скроллом (PlayerMain, AccountsModal) */
+  .pt-safe-top {
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 40px) + 18px);
+  }
+  /* Верхний отступ для шапок модальных экранов (ArtistDetailModal) */
+  .pt-safe-header {
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 38px) + 12px);
+  }
+  /* Верхний отступ для ручки перетаскивания и шапки плеера (FullPlayerModal) */
+  .pt-safe-handle {
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 38px) + 10px);
+  }
+  /* Верхний отступ для всплывающих диалоговых окон (AddTrackModal, ImportUrlModal, ThemeModal) */
+  .pt-safe-dialog {
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 38px) + 20px);
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;

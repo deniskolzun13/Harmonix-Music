@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { BottomBar, TabType } from './components/Navigation/BottomBar';
@@ -12,6 +14,14 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('player');
   const { theme } = useTheme();
   const { currentTrack } = usePlayer();
+
+  // Настройка строки состояния Android: прозрачность и светлые иконки
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+    }
+  }, []);
 
   // При жесте "Назад" со вкладки настроек возвращаемся на плеер
   useBackNavigation('app_settings_tab', activeTab === 'settings', () => setActiveTab('player'), 5);

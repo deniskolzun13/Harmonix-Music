@@ -79,21 +79,22 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
       )}
 
       {/* 2. Верхняя навигационная панель */}
-      <div className="relative z-10 px-4 pt-4 pb-2 flex items-center justify-between border-b border-white/10 bg-[#0d0f14]/60 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
-            <Mic size={15} />
+      <div className="relative z-10 px-4 pt-safe-header pb-3 flex items-center justify-between border-b border-white/10 bg-[#0d0f14]/80 backdrop-blur-md">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
+            <Mic size={16} />
           </div>
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-300">
+          <span className="text-sm font-bold uppercase tracking-wider text-gray-200">
             Музыкант
           </span>
         </div>
 
         <button
           onClick={onClose}
-          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-gray-300 hover:text-white flex items-center justify-center transition-all shadow-md"
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-gray-300 hover:text-white flex items-center justify-center transition-all shadow-md"
+          aria-label="Закрыть"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
       </div>
 

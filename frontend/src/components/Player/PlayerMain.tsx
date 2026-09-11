@@ -339,7 +339,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-44 text-white select-none">
+    <div className="max-w-md mx-auto px-4 pt-safe-top pb-44 text-white select-none">
       {/* Шапка приложения */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -353,13 +353,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
 
         {/* Кнопка смены темы, добавления трека и импорта */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsThemeModalOpen(true)}
             title="Выбрать тему оформления"
-            className="p-2 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
+            className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
           >
-            <Palette size={16} />
+            <Palette size={18} />
           </button>
 
           <button
@@ -368,18 +368,18 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               setIsAddTrackModalOpen(true);
             }}
             title="Добавить трек (файл MP3, ссылка, вручную)"
-            className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
           >
-            <Plus size={14} />
+            <Plus size={15} />
             <span>+ Трек</span>
           </button>
 
           <button
             onClick={() => setIsImportModalOpen(true)}
             title="Импорт по ссылке"
-            className="flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 active:scale-95 transition-all"
           >
-            <Link2 size={14} />
+            <Link2 size={15} />
             <span className="hidden sm:inline">Ссылка</span>
           </button>
         </div>

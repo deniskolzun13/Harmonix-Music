@@ -235,8 +235,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn select-none">
-      <div className="theme-card w-full max-w-md rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-safe-dialog pb-6 bg-black/75 backdrop-blur-md animate-fadeIn select-none">
+      <div className="theme-card w-full max-w-md rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 max-h-[82vh] overflow-y-auto">
         {/* Заголовок */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -252,9 +252,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-gray-300 hover:text-white flex items-center justify-center transition-all"
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-gray-300 hover:text-white flex items-center justify-center transition-all"
+            aria-label="Закрыть"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 

@@ -176,9 +176,9 @@ export const FullPlayerModal: React.FC = () => {
         onTouchStart={handleSheetTouchStart}
         onTouchMove={handleSheetTouchMove}
         onTouchEnd={handleSheetTouchEnd}
-        className="relative z-20 w-full pt-3 pb-1 cursor-grab active:cursor-grabbing flex justify-center items-center"
+        className="relative z-20 w-full pt-safe-handle pb-2 cursor-grab active:cursor-grabbing flex justify-center items-center"
       >
-        <div className="w-10 h-1.5 bg-white/25 rounded-full hover:bg-white/40 transition-colors" />
+        <div className="w-12 h-1.5 bg-white/30 rounded-full hover:bg-white/50 transition-colors shadow-sm" />
       </div>
 
       {/* Верхняя панель заголовка */}
@@ -186,14 +186,14 @@ export const FullPlayerModal: React.FC = () => {
         onTouchStart={handleSheetTouchStart}
         onTouchMove={handleSheetTouchMove}
         onTouchEnd={handleSheetTouchEnd}
-        className="relative z-10 flex items-center justify-between px-6 pt-2 pb-3"
+        className="relative z-10 flex items-center justify-between px-6 pt-1 pb-3"
       >
         <button
           onClick={() => setIsFullPlayerOpen(false)}
-          className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white bg-white/5 active:scale-90 transition-all shadow"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-gray-200 hover:text-white bg-white/10 active:scale-90 transition-all shadow-md"
           aria-label="Свернуть плеер"
         >
-          <ChevronDown size={24} />
+          <ChevronDown size={26} />
         </button>
         <div className="text-center">
           <span className="text-[10px] uppercase tracking-widest text-gray-400 font-medium">
@@ -203,12 +203,12 @@ export const FullPlayerModal: React.FC = () => {
         </div>
         <button
           onClick={() => setShowQueue(!showQueue)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 shadow ${
-            showQueue ? 'bg-blue-600 text-white shadow-blue-600/30' : 'text-gray-400 hover:text-white bg-white/5'
+          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+            showQueue ? 'bg-blue-600 text-white shadow-blue-600/30' : 'text-gray-200 hover:text-white bg-white/10'
           }`}
           aria-label="Очередь воспроизведения"
         >
-          <ListMusic size={20} />
+          <ListMusic size={22} />
         </button>
       </div>
 

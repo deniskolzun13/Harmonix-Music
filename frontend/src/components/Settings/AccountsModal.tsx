@@ -400,7 +400,7 @@ export const AccountsModal: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-44 text-white select-none">
+    <div className="max-w-md mx-auto px-4 pt-safe-top pb-44 text-white select-none">
       {/* Шапка */}
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">

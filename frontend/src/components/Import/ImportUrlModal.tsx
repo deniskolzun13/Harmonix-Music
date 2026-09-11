@@ -127,8 +127,8 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-[#12151e] border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-safe-dialog pb-6 bg-black/80 backdrop-blur-md animate-fadeIn select-none">
+      <div className="bg-[#12151e] border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[82vh]">
         {/* Шапка */}
         <div className="flex items-center justify-between p-4 border-b border-white/5">
           <div className="flex items-center gap-2.5">
@@ -142,7 +142,8 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-gray-300 hover:text-white transition-all shadow"
+            aria-label="Закрыть"
           >
             <X size={18} />
           </button>
