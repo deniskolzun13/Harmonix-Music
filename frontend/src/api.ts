@@ -118,6 +118,31 @@ export async function getTransferStatus(taskId: string): Promise<TransferTask> {
   return res.json();
 }
 
+export async function confirmTransfer(taskId: string, confirmedTrackIds: string[]): Promise<TransferTask> {
+  const res = await fetch(`${getApiBase()}/transfer/${taskId}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed_track_ids: confirmedTrackIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Ошибка подтверждения' }));
+    throw new Error(err.detail || 'Не удалось подтвердить треки');
+  }
+  return res.json();
+}
+
+export async function rejectTransfer(taskId: string): Promise<TransferTask> {
+  const res = await fetch(`${getApiBase()}/transfer/${taskId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Ошибка отклонения' }));
+    throw new Error(err.detail || 'Не удалось отклонить треки');
+  }
+  return res.json();
+}
+
 export async function importPlaylistByUrl(url: string): Promise<{ playlist: Playlist; tracks: Track[] }> {
   const trimmedUrl = url.trim();
   let lastStandaloneError = '';

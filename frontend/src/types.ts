@@ -52,7 +52,7 @@ export interface TransferTrackResult {
   source_track: Track;
   matched_track?: Track;
   confidence: number;
-  status: 'matched' | 'low_confidence' | 'not_found' | 'error';
+  status: 'matched' | 'low_confidence' | 'pending_review' | 'rejected' | 'not_found' | 'error';
   error_detail?: string;
 }
 
@@ -60,13 +60,14 @@ export interface TransferTask {
   task_id: string;
   source_platform: Platform;
   target_platform: Platform;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'waiting_review' | 'completed' | 'failed';
   total: number;
   processed: number;
   matched: number;
   failed: number;
   target_playlist_url?: string;
   target_playlist_name?: string;
+  target_playlist_id?: string;
   results: TransferTrackResult[];
   message: string;
 }

@@ -29,11 +29,16 @@ def init_transfer_db():
                 failed_tracks INT DEFAULT 0,
                 processed_tracks INT DEFAULT 0,
                 target_playlist_name TEXT,
+                target_playlist_id TEXT,
                 message TEXT,
                 created_at REAL,
                 updated_at REAL
             )
         """)
+        try:
+            conn.execute("ALTER TABLE transfer_tasks ADD COLUMN target_playlist_id TEXT")
+        except sqlite3.OperationalError:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS transfer_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,8 +83,8 @@ def save_task_record(task: TransferTask, created_at: Optional[float] = None, upd
             INSERT INTO transfer_tasks (
                 task_id, source_platform, target_platform, status,
                 total_tracks, matched_tracks, failed_tracks, processed_tracks,
-                target_playlist_name, message, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_playlist_name, target_playlist_id, message, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(task_id) DO UPDATE SET
                 status = excluded.status,
                 total_tracks = excluded.total_tracks,
@@ -87,6 +92,7 @@ def save_task_record(task: TransferTask, created_at: Optional[float] = None, upd
                 failed_tracks = excluded.failed_tracks,
                 processed_tracks = excluded.processed_tracks,
                 target_playlist_name = excluded.target_playlist_name,
+                target_playlist_id = excluded.target_playlist_id,
                 message = excluded.message,
                 updated_at = excluded.updated_at
         """, (
@@ -99,6 +105,7 @@ def save_task_record(task: TransferTask, created_at: Optional[float] = None, upd
             task.failed,
             task.processed,
             task.target_playlist_name,
+            task.target_playlist_id,
             task.message,
             cr_time,
             up_time
@@ -125,6 +132,24 @@ def save_track_result(task_id: str, res: TransferTrackResult):
             res.status,
             res.error_detail
         ))
+        conn.commit()
+
+def resolve_pending_results(task_id: str, confirmed_ids: List[str]):
+    """Обновляет статусы спорных результатов в SQLite при подтверждении/отклонении"""
+    with get_db_connection() as conn:
+        for cid in confirmed_ids:
+            conn.execute(
+                """
+                UPDATE transfer_results
+                SET status = 'matched'
+                WHERE task_id = ? AND (matched_id = ? OR source_title = ? OR id = ?)
+                """,
+                (task_id, cid, cid, cid)
+            )
+        conn.execute(
+            "UPDATE transfer_results SET status = 'rejected' WHERE task_id = ? AND status = 'pending_review'",
+            (task_id,)
+        )
         conn.commit()
 
 def load_task_from_db(task_id: str) -> Optional[TransferTask]:
@@ -165,6 +190,9 @@ def load_task_from_db(task_id: str) -> Optional[TransferTask]:
                 )
             )
 
+        keys = task_row.keys() if hasattr(task_row, "keys") else []
+        pl_id = task_row["target_playlist_id"] if "target_playlist_id" in keys else None
+
         return TransferTask(
             task_id=task_row["task_id"],
             source_platform=PlatformEnum(task_row["source_platform"]),
@@ -175,6 +203,7 @@ def load_task_from_db(task_id: str) -> Optional[TransferTask]:
             matched=task_row["matched_tracks"] or 0,
             failed=task_row["failed_tracks"] or 0,
             target_playlist_name=task_row["target_playlist_name"],
+            target_playlist_id=pl_id,
             message=task_row["message"] or "",
             results=results
         )

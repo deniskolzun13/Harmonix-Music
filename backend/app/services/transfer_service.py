@@ -10,7 +10,8 @@ from app.services.transfer_db import (
     cleanup_old_transfers,
     save_task_record,
     save_track_result,
-    load_task_from_db
+    load_task_from_db,
+    resolve_pending_results
 )
 
 logger = logging.getLogger("harmonix.transfer")
@@ -78,6 +79,7 @@ class TransferService:
                 target_playlist_id = "favorites"
 
             task.target_playlist_name = pl_name
+            task.target_playlist_id = target_playlist_id
             save_task_record(task)
 
             # 3. Сопоставляем каждый трек с адаптивной задержкой
@@ -95,8 +97,9 @@ class TransferService:
                     
                     best_match, score = find_best_match(src_track, candidates)
 
-                    if best_match and score >= 65.0:
-                        status = "matched" if score >= 80.0 else "low_confidence"
+                    if best_match and score >= 80.0:
+                        # Точное совпадение (>=80%) — автоматическое добавление
+                        status = "matched"
                         res = TransferTrackResult(
                             source_track=src_track,
                             matched_track=best_match,
@@ -106,7 +109,18 @@ class TransferService:
                         task.results.append(res)
                         task.matched += 1
                         matched_tracks_to_add.append(best_match)
+                    elif best_match and score >= 65.0:
+                        # Спорное совпадение (65-80%) — требует ручного подтверждения
+                        status = "pending_review"
+                        res = TransferTrackResult(
+                            source_track=src_track,
+                            matched_track=best_match,
+                            confidence=score,
+                            status=status
+                        )
+                        task.results.append(res)
                     else:
+                        # Не найдено (<65%)
                         res = TransferTrackResult(
                             source_track=src_track,
                             matched_track=None,
@@ -146,7 +160,7 @@ class TransferService:
                 # Адаптивная пауза между треками
                 await asyncio.sleep(current_delay)
 
-            # 4. Добавляем сопоставленные треки в целевой сервис
+            # 4. Добавляем автоматически подтвержденные (>= 80%) треки в целевой сервис
             if matched_tracks_to_add:
                 task.message = f"Добавление {len(matched_tracks_to_add)} треков в {req.target_platform.value.upper()}..."
                 save_task_record(task)
@@ -158,8 +172,15 @@ class TransferService:
             else:
                 added_count = 0
 
-            task.status = "completed"
-            task.message = f"Перенос завершен! Успешно сопоставлено и добавлено {added_count} из {task.total} треков."
+            # 5. Проверяем наличие спорных совпадений (65-80%)
+            pending_tracks = [r for r in task.results if r.status == "pending_review"]
+            if pending_tracks:
+                task.status = "waiting_review"
+                task.message = f"Перенесено {added_count} треков. Ожидается подтверждение {len(pending_tracks)} спорных совпадений."
+            else:
+                task.status = "completed"
+                task.message = f"Перенос завершен! Успешно сопоставлено и добавлено {added_count} из {task.total} треков."
+
             save_task_record(task)
 
         except Exception as e:
@@ -167,5 +188,61 @@ class TransferService:
             task.status = "failed"
             task.message = f"Ошибка: {str(e)}"
             save_task_record(task)
+
+    async def confirm_task(self, task_id: str, confirmed_track_ids: list[str]) -> Optional[TransferTask]:
+        """Подтверждение выбранных спорных треков пользователем"""
+        task = self.get_task(task_id)
+        if not task:
+            return None
+
+        target_adapter = manager.get_adapter(task.target_platform)
+        target_playlist_id = task.target_playlist_id or "favorites"
+
+        tracks_to_add = []
+        confirmed_set = set(confirmed_track_ids)
+
+        for res in task.results:
+            if res.status == "pending_review":
+                matched_id = res.matched_track.id if res.matched_track else ""
+                source_id = res.source_track.id if res.source_track else ""
+                source_title = res.source_track.title if res.source_track else ""
+
+                if matched_id in confirmed_set or source_id in confirmed_set or source_title in confirmed_set:
+                    res.status = "matched"
+                    task.matched += 1
+                    if res.matched_track:
+                        tracks_to_add.append(res.matched_track)
+                else:
+                    res.status = "rejected"
+                    task.failed += 1
+
+        if tracks_to_add:
+            try:
+                target_adapter.add_tracks_to_playlist(target_playlist_id, tracks_to_add)
+            except Exception as e:
+                logger.error(f"Ошибка при добавлении подтвержденных треков: {e}")
+
+        resolve_pending_results(task_id, confirmed_track_ids)
+        task.status = "completed"
+        task.message = f"Перенос завершен! Подтверждено и добавлено {len(tracks_to_add)} треков."
+        save_task_record(task)
+        return task
+
+    async def reject_task(self, task_id: str) -> Optional[TransferTask]:
+        """Отклонение всех спорных совпадений и завершение переноса"""
+        task = self.get_task(task_id)
+        if not task:
+            return None
+
+        for res in task.results:
+            if res.status == "pending_review":
+                res.status = "rejected"
+                task.failed += 1
+
+        resolve_pending_results(task_id, [])
+        task.status = "completed"
+        task.message = "Перенос завершен. Спорные совпадения отклонены."
+        save_task_record(task)
+        return task
 
 transfer_service = TransferService()

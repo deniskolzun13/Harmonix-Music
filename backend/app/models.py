@@ -63,7 +63,7 @@ class TransferTrackResult(BaseModel):
     source_track: Track
     matched_track: Optional[Track] = None
     confidence: float = 0.0
-    status: str = "matched"  # matched, low_confidence, not_found, error
+    status: str = "matched"  # matched, pending_review, rejected, not_found, error
     error_detail: Optional[str] = None
 
 
@@ -71,15 +71,20 @@ class TransferTask(BaseModel):
     task_id: str
     source_platform: PlatformEnum
     target_platform: PlatformEnum
-    status: str = "queued"  # queued, running, completed, failed
+    status: str = "queued"  # queued, running, waiting_review, completed, failed
     total: int = 0
     processed: int = 0
     matched: int = 0
     failed: int = 0
     target_playlist_url: Optional[str] = None
     target_playlist_name: Optional[str] = None
+    target_playlist_id: Optional[str] = None
     results: List[TransferTrackResult] = Field(default_factory=list)
     message: str = "Задача ожидает запуска"
+
+
+class ConfirmTransferRequest(BaseModel):
+    confirmed_track_ids: List[str]
 
 
 class TransferHistoryItem(BaseModel):

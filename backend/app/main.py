@@ -17,7 +17,8 @@ from app.models import (
     Track,
     TransferRequest,
     TransferTask,
-    TransferHistoryResponse
+    TransferHistoryResponse,
+    ConfirmTransferRequest
 )
 from app.config import get_local_ip, generate_qr_code_base64, get_allowed_origins
 from app.platforms.manager import manager
@@ -202,6 +203,26 @@ def get_transfer_history_endpoint(limit: int = Query(20, ge=1, le=100), offset: 
 def get_transfer_status(task_id: str):
     """Получение статуса и прогресса переноса"""
     task = transfer_service.get_task(task_id)
+    if not task:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Задача переноса не найдена")
+    return task
+
+
+@app.post("/api/transfer/{task_id}/confirm", response_model=TransferTask)
+async def confirm_transfer(task_id: str, req: ConfirmTransferRequest):
+    """Подтверждение выбранных спорных треков и завершение переноса"""
+    task = await transfer_service.confirm_task(task_id, req.confirmed_track_ids)
+    if not task:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Задача переноса не найдена")
+    return task
+
+
+@app.post("/api/transfer/{task_id}/reject", response_model=TransferTask)
+async def reject_transfer(task_id: str):
+    """Отклонение всех спорных треков и завершение переноса"""
+    task = await transfer_service.reject_task(task_id)
     if not task:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Задача переноса не найдена")

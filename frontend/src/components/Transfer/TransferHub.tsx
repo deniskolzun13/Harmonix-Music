@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Music2, Link2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Music2, Link2, CheckSquare, Square } from 'lucide-react';
 import { Platform, Playlist, TransferTask } from '../../types';
-import { getPlaylists, startTransfer, getTransferStatus } from '../../api';
+import { getPlaylists, startTransfer, getTransferStatus, confirmTransfer, rejectTransfer } from '../../api';
 import { ImportUrlModal } from '../Import/ImportUrlModal';
 
 export const TransferHub: React.FC = () => {
@@ -14,6 +14,8 @@ export const TransferHub: React.FC = () => {
   const [activeTask, setActiveTask] = useState<TransferTask | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   // Загружаем плейлисты выбранного источника
   useEffect(() => {
@@ -43,7 +45,11 @@ export const TransferHub: React.FC = () => {
         try {
           const updated = await getTransferStatus(activeTask.task_id);
           setActiveTask(updated);
-          if (updated.status === 'completed' || updated.status === 'failed') {
+          if (
+            updated.status === 'completed' ||
+            updated.status === 'failed' ||
+            updated.status === 'waiting_review'
+          ) {
             setIsTransferring(false);
           }
         } catch (err) {
@@ -53,6 +59,48 @@ export const TransferHub: React.FC = () => {
     }
     return () => clearInterval(timer);
   }, [activeTask]);
+
+  // При переходе в waiting_review предзаполняем выбор всеми спорными треками
+  useEffect(() => {
+    if (activeTask && activeTask.status === 'waiting_review') {
+      const pendingIds = activeTask.results
+        .filter((r) => r.status === 'pending_review' && r.matched_track)
+        .map((r) => r.matched_track!.id);
+      setSelectedPendingIds(pendingIds);
+    }
+  }, [activeTask?.status]);
+
+  const handleTogglePending = (id: string) => {
+    setSelectedPendingIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirmReview = async () => {
+    if (!activeTask) return;
+    try {
+      setIsConfirming(true);
+      const updated = await confirmTransfer(activeTask.task_id, selectedPendingIds);
+      setActiveTask(updated);
+    } catch (err: any) {
+      alert('Ошибка при подтверждении треков: ' + (err.message || String(err)));
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleRejectReview = async () => {
+    if (!activeTask) return;
+    try {
+      setIsConfirming(true);
+      const updated = await rejectTransfer(activeTask.task_id);
+      setActiveTask(updated);
+    } catch (err: any) {
+      alert('Ошибка при отклонении треков: ' + (err.message || String(err)));
+    } finally {
+      setIsConfirming(false);
+    }
+  };
 
   const handleStartTransfer = async () => {
     if (sourcePlatform === targetPlatform) {
@@ -240,6 +288,8 @@ export const TransferHub: React.FC = () => {
               className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                 activeTask.status === 'completed'
                   ? 'bg-emerald-500/20 text-emerald-400'
+                  : activeTask.status === 'waiting_review'
+                  ? 'bg-amber-500/20 text-amber-400'
                   : activeTask.status === 'failed'
                   ? 'bg-red-500/20 text-red-400'
                   : 'bg-blue-500/20 text-blue-400'
@@ -247,6 +297,8 @@ export const TransferHub: React.FC = () => {
             >
               {activeTask.status === 'completed'
                 ? 'Готово'
+                : activeTask.status === 'waiting_review'
+                ? 'Проверка'
                 : activeTask.status === 'failed'
                 ? 'Ошибка'
                 : `${progressPercent}%`}
@@ -279,6 +331,87 @@ export const TransferHub: React.FC = () => {
             </div>
           </div>
 
+          {/* Интерактивная секция подтверждения спорных треков (65-80%) */}
+          {activeTask.status === 'waiting_review' && (
+            <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-center gap-2 mb-1.5 text-amber-400">
+                <AlertCircle size={17} />
+                <h4 className="text-xs font-bold uppercase tracking-wider">
+                  Требуется подтверждение совпадений
+                </h4>
+              </div>
+              <p className="text-[11px] text-gray-300 mb-3">
+                Найдены похожие треки с частичной уверенностью (65–80%). Отметьте те, которые нужно добавить в целевой плейлист:
+              </p>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1 mb-3">
+                {activeTask.results
+                  .filter((res) => res.status === 'pending_review' && res.matched_track)
+                  .map((res) => {
+                    const matchedId = res.matched_track!.id;
+                    const isChecked = selectedPendingIds.includes(matchedId);
+
+                    return (
+                      <div
+                        key={matchedId}
+                        onClick={() => handleTogglePending(matchedId)}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                          isChecked
+                            ? 'bg-amber-500/15 border-amber-500/40 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="mt-0.5 text-amber-400 focus:outline-none"
+                        >
+                          {isChecked ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <div className="flex-1 min-w-0 text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold text-gray-400">
+                              Что искали ➔ Что найдено
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                              {Math.round(res.confidence)}%
+                            </span>
+                          </div>
+                          <p className="text-gray-300 font-medium truncate">
+                            <span className="text-gray-500">Искали:</span> {res.source_track.artist} - {res.source_track.title}
+                          </p>
+                          <p className="text-amber-300 font-medium truncate mt-0.5">
+                            <span className="text-amber-500/80">Найдено:</span> {res.matched_track!.artist} - {res.matched_track!.title}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleConfirmReview}
+                  disabled={isConfirming}
+                  className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md shadow-amber-500/20 disabled:opacity-50"
+                >
+                  {isConfirming ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={14} />
+                  )}
+                  <span>Добавить выбранные ({selectedPendingIds.length})</span>
+                </button>
+                <button
+                  onClick={handleRejectReview}
+                  disabled={isConfirming}
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                >
+                  Пропустить все
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Список перенесённых треков */}
           {activeTask.results.length > 0 && (
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -302,9 +435,13 @@ export const TransferHub: React.FC = () => {
                       <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">
                         <CheckCircle2 size={12} /> {Math.round(res.confidence)}%
                       </span>
-                    ) : res.status === 'low_confidence' ? (
+                    ) : res.status === 'pending_review' ? (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded">
-                        {Math.round(res.confidence)}%
+                        Ожидает {Math.round(res.confidence)}%
+                      </span>
+                    ) : res.status === 'rejected' ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 bg-white/10 px-1.5 py-0.5 rounded">
+                        Отклонено
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/20 px-1.5 py-0.5 rounded">

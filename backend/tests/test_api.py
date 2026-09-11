@@ -227,3 +227,76 @@ def test_rate_limit_retry_and_resilience():
     assert res == "success"
     assert call_count == 3
 
+
+def test_transfer_confirm_and_reject():
+    import time
+    from app.services.transfer_service import transfer_service
+    from app.services.transfer_db import save_task_record, save_track_result
+    from app.models import TransferTask, TransferTrackResult, Track, PlatformEnum
+
+    # 1. Задача для тестирования confirm
+    task_id = f"test-review-{int(time.time())}"
+    task = TransferTask(
+        task_id=task_id,
+        source_platform=PlatformEnum.YANDEX,
+        target_platform=PlatformEnum.SPOTIFY,
+        status="waiting_review",
+        total=1,
+        matched=0,
+        failed=0,
+        processed=1,
+        target_playlist_name="Review Playlist"
+    )
+    src_track = Track(id="src_rev_1", title="Remix Song", artist="DJ Test", platform=PlatformEnum.YANDEX)
+    matched_track = Track(id="sp_match_1", title="Original Song", artist="DJ Test", platform=PlatformEnum.SPOTIFY)
+    pending_res = TransferTrackResult(
+        source_track=src_track,
+        matched_track=matched_track,
+        confidence=72.0,
+        status="pending_review"
+    )
+    task.results.append(pending_res)
+    transfer_service.tasks[task_id] = task
+    save_task_record(task)
+    save_track_result(task_id, pending_res)
+
+    # Подтверждаем трек через API
+    resp_confirm = client.post(f"/api/transfer/{task_id}/confirm", json={"confirmed_track_ids": ["sp_match_1"]})
+    assert resp_confirm.status_code == 200
+    c_data = resp_confirm.json()
+    assert c_data["status"] == "completed"
+    assert c_data["matched"] == 1
+    assert c_data["results"][0]["status"] == "matched"
+
+    # 2. Задача для тестирования reject
+    task_id_rej = f"test-reject-{int(time.time())}"
+    task_rej = TransferTask(
+        task_id=task_id_rej,
+        source_platform=PlatformEnum.YANDEX,
+        target_platform=PlatformEnum.SPOTIFY,
+        status="waiting_review",
+        total=1,
+        matched=0,
+        failed=0,
+        processed=1,
+        target_playlist_name="Reject Playlist"
+    )
+    pending_res_rej = TransferTrackResult(
+        source_track=src_track,
+        matched_track=matched_track,
+        confidence=68.0,
+        status="pending_review"
+    )
+    task_rej.results.append(pending_res_rej)
+    transfer_service.tasks[task_id_rej] = task_rej
+    save_task_record(task_rej)
+    save_track_result(task_id_rej, pending_res_rej)
+
+    # Отклоняем спорные совпадения через API
+    resp_reject = client.post(f"/api/transfer/{task_id_rej}/reject")
+    assert resp_reject.status_code == 200
+    r_data = resp_reject.json()
+    assert r_data["status"] == "completed"
+    assert r_data["failed"] == 1
+    assert r_data["results"][0]["status"] == "rejected"
+
