@@ -385,18 +385,6 @@ export const AccountsModal: React.FC = () => {
       desc: 'Жидкое матовое стекло, неоновые акценты и свечение',
       iconBg: 'bg-cyan-500/20 border-cyan-400 text-cyan-300',
     },
-    {
-      id: 'y2k',
-      title: 'Ретро Y2K (2000-е)',
-      desc: 'Вайб Winamp, неоновый лайм, пиксельная сетка',
-      iconBg: 'bg-lime-500/20 border-lime-400 text-lime-300',
-    },
-    {
-      id: 'artwork',
-      title: 'Динамическая обложка',
-      desc: 'Фон адаптируется и размывается под текущий трек',
-      iconBg: 'bg-purple-500/20 border-purple-400 text-purple-300',
-    },
   ];
 
   return (

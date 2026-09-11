@@ -10,7 +10,7 @@ interface BottomBarProps {
 }
 
 export const BottomBar: React.FC<BottomBarProps> = ({ activeTab, setActiveTab }) => {
-  const { theme, accentColor } = useTheme();
+  const { theme } = useTheme();
 
   const tabs = [
     { id: 'player' as TabType, label: 'Плеер', icon: Music },
@@ -18,9 +18,7 @@ export const BottomBar: React.FC<BottomBarProps> = ({ activeTab, setActiveTab })
   ];
 
   const getActiveColor = () => {
-    if (theme === 'y2k') return '#39ff14';
     if (theme === 'glass') return '#00f0ff';
-    if (theme === 'artwork') return accentColor;
     return '#3b82f6';
   };
 

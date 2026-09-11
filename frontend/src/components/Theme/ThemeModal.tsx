@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Moon, Radio, Sparkles, Palette, CheckCircle2 } from 'lucide-react';
+import { X, Moon, Sparkles, Palette, CheckCircle2 } from 'lucide-react';
 import { AppTheme, useTheme } from '../../context/ThemeContext';
 
 interface ThemeModalProps {
@@ -33,15 +33,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ isOpen, onClose }) => {
       badge: 'Энергосбережение OLED',
     },
     {
-      id: 'y2k',
-      title: 'Эстетика 2000-х (Y2K / Winamp)',
-      subtitle: 'Ретро, пиксель-арт & кислотные акценты',
-      description: 'Винтажные элементы интерфейса, пиксельный стиль, кислотный лайм и ретро-вайб в духе культового Winamp и Win98.',
-      icon: <Radio size={20} className="text-[#39ff14]" />,
-      previewClass: 'bg-[#121216] border-2 border-[#39ff14]/60 text-[#39ff14] font-mono',
-      badge: 'Винтажный Winamp',
-    },
-    {
       id: 'glass',
       title: 'Глассморфизм (Glassmorphism)',
       subtitle: 'Матовое стекло & Неоновые свечения',
@@ -49,15 +40,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ isOpen, onClose }) => {
       icon: <Sparkles size={20} className="text-cyan-400" />,
       previewClass: 'bg-white/10 backdrop-blur-md border border-cyan-400/40 text-cyan-200 shadow-[0_0_15px_rgba(0,240,255,0.2)]',
       badge: 'Неоновое стекло',
-    },
-    {
-      id: 'artwork',
-      title: 'Динамические обложки (Artwork-Driven)',
-      subtitle: 'Адаптивный фоновый Blur под трек',
-      description: 'Интерфейс полностью подстраивается под цвета обложки текущего трека с глубоким кинематографичным размытием.',
-      icon: <Palette size={20} className="text-purple-400" />,
-      previewClass: 'bg-gradient-to-r from-purple-900/60 to-blue-900/60 backdrop-blur-md border border-purple-400/30 text-purple-200',
-      badge: 'Полное погружение',
     },
   ];
 

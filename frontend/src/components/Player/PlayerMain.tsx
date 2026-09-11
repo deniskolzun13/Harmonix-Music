@@ -472,9 +472,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           onClick={() => setActiveTab('playlists')}
           className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
             activeTab === 'playlists'
-              ? theme === 'y2k'
-                ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
-                : theme === 'glass'
+              ? theme === 'glass'
                 ? 'bg-blue-500/30 border-blue-400 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.4)] backdrop-blur-md'
                 : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/25'
               : 'theme-card text-gray-400 hover:text-white border-white/5'
@@ -491,9 +489,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           onClick={() => setActiveTab('artists')}
           className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
             activeTab === 'artists'
-              ? theme === 'y2k'
-                ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
-                : theme === 'glass'
+              ? theme === 'glass'
                 ? 'bg-purple-500/30 border-purple-400 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.4)] backdrop-blur-md'
                 : 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/25'
               : 'theme-card text-gray-400 hover:text-white border-white/5'
@@ -513,9 +509,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           }}
           className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
             activeTab === 'cached'
-              ? theme === 'y2k'
-                ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
-                : theme === 'glass'
+              ? theme === 'glass'
                 ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.4)] backdrop-blur-md'
                 : 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/25'
               : 'theme-card text-gray-400 hover:text-white border-white/5'

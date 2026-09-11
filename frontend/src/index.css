@@ -71,31 +71,7 @@ html.theme-dark .theme-subcard {
   border-color: rgba(255, 255, 255, 0.05);
 }
 
-/* 2. Эстетика 2000-х (Y2K / Winamp Retro) */
-html.theme-y2k body {
-  background-color: #0b0d14 !important;
-  color: #e0e7ff;
-}
-html.theme-y2k .theme-card {
-  background-color: #12141f;
-  border: 1px solid #39ff14;
-  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.9);
-}
-html.theme-y2k .theme-subcard {
-  background-color: #080a12;
-  border: 1px dashed #39ff14;
-}
-html.theme-y2k .theme-accent-text {
-  color: #39ff14 !important;
-  font-family: monospace;
-}
-html.theme-y2k .theme-accent-bg {
-  background-color: #39ff14 !important;
-  color: #000 !important;
-  font-weight: 800;
-}
-
-/* 3. Глассморфизм (Glassmorphism) */
+/* 2. Глассморфизм (Glassmorphism) */
 html.theme-glass body {
   background-color: #060913 !important;
   color: #ffffff;
@@ -116,22 +92,6 @@ html.theme-glass .theme-subcard {
 html.theme-glass .theme-accent-bg {
   background: linear-gradient(135deg, #00f0ff 0%, #3b82f6 100%) !important;
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.4) !important;
-}
-
-/* 4. Динамические обложки (Artwork-Driven) */
-html.theme-artwork body {
-  background-color: #06070a !important;
-  color: #ffffff;
-}
-html.theme-artwork .theme-card {
-  background: rgba(18, 22, 34, 0.65) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-}
-html.theme-artwork .theme-subcard {
-  background: rgba(10, 13, 22, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Анимации переходов */
