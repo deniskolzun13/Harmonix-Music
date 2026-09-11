@@ -269,6 +269,75 @@ export async function getCachedTracks(): Promise<Track[]> {
 }
 
 /**
+ * Сохраняет выбранный локальный аудиофайл с устройства в IndexedDB
+ */
+export async function saveLocalAudioFileToCache(
+  file: File,
+  customArtist?: string,
+  customTitle?: string
+): Promise<Track> {
+  const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim();
+  const parts = cleanName.split(' - ');
+  let artist = customArtist || 'Локальный трек';
+  let title = customTitle || cleanName;
+  if (!customArtist && parts.length >= 2) {
+    artist = parts[0].trim();
+    title = parts.slice(1).join(' - ').trim();
+  }
+
+  const trackId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const objectUrl = URL.createObjectURL(file);
+
+  // Определение длительности аудио через Audio элемент
+  let duration = 0;
+  try {
+    duration = await new Promise<number>((resolve) => {
+      const a = new Audio(objectUrl);
+      a.addEventListener('loadedmetadata', () => resolve(Math.round(a.duration) || 0));
+      a.addEventListener('error', () => resolve(0));
+      setTimeout(() => resolve(0), 1200);
+    });
+  } catch {}
+
+  const record: CachedTrackRecord = {
+    id: trackId,
+    platform: 'local' as any,
+    title,
+    artist,
+    duration,
+    audioBlob: file,
+    sizeBytes: file.size,
+    cachedAt: Date.now(),
+    playlistTitle: 'Файлы устройства',
+    isPreview: false,
+  };
+
+  const db = await getDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.put(record);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+
+  const track: Track = {
+    id: trackId,
+    title,
+    artist,
+    album: 'Файлы устройства',
+    duration,
+    stream_url: objectUrl,
+    platform: 'local' as any,
+    is_playable: true,
+    original_uri: `local:file:${trackId}`,
+    isPreview: false,
+  };
+
+  return track;
+}
+
+/**
  * Удаляет трек из локального кэша
  */
 export async function deleteCachedTrack(trackId: string): Promise<void> {

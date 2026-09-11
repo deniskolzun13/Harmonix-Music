@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -26,6 +26,7 @@ import {
   getCachedTracks,
   getCachedTrackIds,
   saveTrackToCache,
+  saveLocalAudioFileToCache,
   deleteCachedTrack,
   clearCache,
   getCacheStats,
@@ -275,6 +276,33 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     }
   };
 
+  // Массовый выбор локальных аудиофайлов с телефона / ПК
+  const [isImportingLocalFiles, setIsImportingLocalFiles] = useState(false);
+  const localFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleSelectLocalFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsImportingLocalFiles(true);
+    let count = 0;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        await saveLocalAudioFileToCache(files[i]);
+        count++;
+      }
+      await refreshCacheInfo();
+      setActiveTab('cached');
+    } catch (err: any) {
+      alert('Ошибка при сохранении файлов: ' + (err.message || err));
+    } finally {
+      setIsImportingLocalFiles(false);
+      if (localFileInputRef.current) {
+        localFileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Фильтрация треков для отображения
   const sourceTracks = activeTab === 'cached' ? cachedTracks : activeTracks;
   const displayedTracks = filterQuery.trim()
@@ -304,6 +332,12 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         return (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
             Spotify
+          </span>
+        );
+      case 'local':
+        return (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-400 font-bold border border-teal-500/30">
+            Файл
           </span>
         );
       default:
@@ -345,6 +379,19 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           >
             <Plus size={15} />
             <span>+ Трек</span>
+          </button>
+
+          <button
+            onClick={() => localFileInputRef.current?.click()}
+            title="Открыть аудиофайлы с телефона или ПК"
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-600/25 active:scale-95 transition-all"
+          >
+            {isImportingLocalFiles ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <HardDrive size={15} />
+            )}
+            <span className="hidden sm:inline">Файлы</span>
           </button>
 
           <button
@@ -738,6 +785,23 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           <p className="text-[11px] text-gray-400">
             Все треки из этого раздела сохранены в постоянную память смартфона и играют без интернета.
           </p>
+          <button
+            onClick={() => localFileInputRef.current?.click()}
+            disabled={isImportingLocalFiles}
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+          >
+            {isImportingLocalFiles ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                <span>Импорт аудиофайлов...</span>
+              </>
+            ) : (
+              <>
+                <HardDrive size={15} />
+                <span>+ Добавить аудиофайлы с телефона (MP3/FLAC)</span>
+              </>
+            )}
+          </button>
         </div>
       )}
 
@@ -914,6 +978,16 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     </>
   )}
 
+
+      {/* Скрытый input для выбора аудиофайлов с устройства */}
+      <input
+        type="file"
+        ref={localFileInputRef}
+        onChange={handleSelectLocalFiles}
+        multiple
+        accept="audio/*,.mp3,.flac,.wav,.ogg,.m4a,.aac"
+        className="hidden"
+      />
 
       {/* Модальное окно добавления треков (AddTrackModal) */}
       <AddTrackModal

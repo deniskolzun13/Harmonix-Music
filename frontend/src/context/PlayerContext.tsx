@@ -305,7 +305,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!audioRef.current) return;
         if (cachedBlobUrl) {
           audioRef.current.src = cachedBlobUrl;
-        } else if (track.stream_url && track.stream_url.startsWith('http')) {
+        } else if (track.stream_url && (track.stream_url.startsWith('http') || track.stream_url.startsWith('blob:'))) {
           audioRef.current.src = track.stream_url;
         } else if (track.platform === 'yandex') {
           try {
