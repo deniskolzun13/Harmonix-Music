@@ -33,6 +33,35 @@ def get_local_ip() -> str:
     return ip
 
 
+def get_allowed_origins() -> list[str]:
+    """
+    Формирует безопасный список разрешенных CORS Origins для локальной разработки и мобильного доступа.
+    Включает localhost, 127.0.0.1, локальный IP и мобильное WebView окружение.
+    """
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "capacitor://localhost",
+        "http://localhost",
+    ]
+    local_ip = get_local_ip()
+    if local_ip not in ("127.0.0.1", "localhost"):
+        origins.append(f"http://{local_ip}:5173")
+        origins.append(f"http://{local_ip}:8000")
+
+    # Возможность расширить origins через переменную окружения HARMONIX_ALLOWED_ORIGINS
+    extra = os.getenv("HARMONIX_ALLOWED_ORIGINS")
+    if extra:
+        for item in extra.split(","):
+            cleaned = item.strip()
+            if cleaned and cleaned not in origins:
+                origins.append(cleaned)
+
+    return origins
+
+
 def generate_qr_code_base64(url: str) -> str:
     """Генерирует QR-код в виде data URL base64 для мобильного сопряжения"""
     qr = qrcode.QRCode(

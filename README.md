@@ -72,7 +72,18 @@ npm install
 npm run dev
 ```
 
-### 3. Сборка Android APK
+### 3. Безопасность и настройка CORS
+Для защиты от CSRF бэкенд использует явный список доверенных источников (`get_allowed_origins()`):
+- `localhost` и `127.0.0.1` (порты 5173 и 8000)
+- Автоматически определенный локальный IP в сети Wi-Fi/LAN (`http://{local_ip}:5173`, `http://{local_ip}:8000`)
+- Мобильное окружение Capacitor (`capacitor://localhost`, `http://localhost`)
+
+Если вы разворачиваете приложение за пределами локальной сети (например, на сервере, через домен, VPN или reverse proxy), укажите разрешенные origins через переменную окружения `HARMONIX_ALLOWED_ORIGINS` (через запятую):
+```bash
+set HARMONIX_ALLOWED_ORIGINS=https://my-music.example.com,http://192.168.1.150:3000
+```
+
+### 4. Сборка Android APK
 При наличии Android SDK и JDK запустите:
 ```bash
 build_apk.bat

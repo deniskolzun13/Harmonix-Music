@@ -18,7 +18,7 @@ from app.models import (
     TransferRequest,
     TransferTask
 )
-from app.config import get_local_ip, generate_qr_code_base64
+from app.config import get_local_ip, generate_qr_code_base64, get_allowed_origins
 from app.platforms.manager import manager
 from app.services.transfer_service import transfer_service
 from app.services.audio_proxy import proxy_audio_stream
@@ -34,10 +34,10 @@ logger = logging.getLogger("harmonix.api")
 
 app = FastAPI(title="Harmonix Mobile Music & Transfer API", version="1.0.0")
 
-# Включаем CORS для фронтенда Vite и мобильных клиентов
+# Безопасный CORS для локального фронтенда Vite и мобильных клиентов
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -95,3 +95,34 @@ def test_encrypted_auth_config():
         # Восстанавливаем исходную конфигурацию
         save_auth_config(original)
 
+
+def test_cors_configuration():
+    # Проверка безопасного CORS
+    from app.config import get_allowed_origins
+
+    allowed = get_allowed_origins()
+    assert "http://localhost:5173" in allowed
+    assert "http://127.0.0.1:5173" in allowed
+
+    # Запрос с разрешенным Origin
+    resp = client.options(
+        "/api/network/info",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert resp.headers.get("access-control-allow-credentials") == "true"
+
+    # Запрос с неразрешенным Origin не должен получать allow-origin
+    resp_bad = client.options(
+        "/api/network/info",
+        headers={
+            "Origin": "http://malicious-site.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp_bad.headers.get("access-control-allow-origin") is None
+
