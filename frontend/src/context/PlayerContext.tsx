@@ -28,6 +28,8 @@ interface PlayerContextType {
   setPlaybackRate: (rate: number) => void;
   crossfadeSeconds: number;
   setCrossfadeSeconds: (sec: number) => void;
+  shakeToShuffle: boolean;
+  setShakeToShuffle: (enabled: boolean) => void;
   playTrack: (track: Track, newQueue?: Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -106,6 +108,22 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCrossfadeSecondsState(sec);
     try {
       localStorage.setItem('harmonix_crossfade', sec.toString());
+    } catch {}
+  };
+
+  // Встряхивание для перемешивания (Shake to Shuffle)
+  const [shakeToShuffle, setShakeToShuffleState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('harmonix_shake_to_shuffle') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const setShakeToShuffle = (enabled: boolean) => {
+    setShakeToShuffleState(enabled);
+    try {
+      localStorage.setItem('harmonix_shake_to_shuffle', enabled ? 'true' : 'false');
     } catch {}
   };
 
@@ -630,6 +648,75 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
     return () => clearInterval(interval);
   }, [isPlaying, sleepTimerOption, sleepTimerRemaining]);
 
+  const queueRef = useRef<Track[]>(queue);
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  const nextTrackRef = useRef(nextTrack);
+  useEffect(() => {
+    nextTrackRef.current = nextTrack;
+  }, [nextTrack]);
+
+  // Жест «Встряхнуть для перемешивания» (Shake-to-Shuffle)
+  useEffect(() => {
+    if (!shakeToShuffle) return;
+
+    let lastX: number | null = null;
+    let lastY: number | null = null;
+    let lastZ: number | null = null;
+    let lastShakeTime = 0;
+    const SHAKE_THRESHOLD = 14; // Порог резкого ускорения устройства
+    const SHAKE_COOLDOWN = 1200; // Задержка между срабатываниями (мс)
+
+    const handleDeviceMotion = (event: DeviceMotionEvent) => {
+      const current = event.accelerationIncludingGravity || event.acceleration;
+      if (!current || current.x === null || current.y === null || current.z === null) return;
+
+      const { x, y, z } = current;
+
+      if (lastX !== null && lastY !== null && lastZ !== null) {
+        const deltaX = Math.abs(x - lastX);
+        const deltaY = Math.abs(y - lastY);
+        const deltaZ = Math.abs(z - lastZ);
+        const totalDelta = deltaX + deltaY + deltaZ;
+        const now = Date.now();
+
+        if (totalDelta > SHAKE_THRESHOLD && now - lastShakeTime > SHAKE_COOLDOWN) {
+          lastShakeTime = now;
+          // Тактильный виброотклик
+          try {
+            if ('vibrate' in navigator) {
+              navigator.vibrate([40, 60, 40]);
+            }
+          } catch {}
+
+          // Включаем Shuffle режим и переходим к следующему случайному треку
+          setIsShuffle(true);
+          if (queueRef.current.length > 0) {
+            shuffleQueueRef.current = generateSmartShuffleQueue(queueRef.current, currentTrackRef.current?.id);
+            shufflePointerRef.current = 0;
+            if (shuffleQueueRef.current.length > 0) {
+              const nextT = shuffleQueueRef.current[shufflePointerRef.current++];
+              playTrack(nextT);
+              return;
+            }
+          }
+          nextTrackRef.current();
+        }
+      }
+
+      lastX = x;
+      lastY = y;
+      lastZ = z;
+    };
+
+    window.addEventListener('devicemotion', handleDeviceMotion, { passive: true });
+    return () => {
+      window.removeEventListener('devicemotion', handleDeviceMotion);
+    };
+  }, [shakeToShuffle]);
+
   const setSleepTimer = (option: 'off' | 'end_of_track' | number) => {
     setSleepTimerOption(option);
     if (option === 'off') {
@@ -671,6 +758,8 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
         setPlaybackRate,
         crossfadeSeconds,
         setCrossfadeSeconds,
+        shakeToShuffle,
+        setShakeToShuffle,
         playTrack,
         togglePlay,
         nextTrack,

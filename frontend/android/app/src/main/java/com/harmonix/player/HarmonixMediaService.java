@@ -110,6 +110,7 @@ public class HarmonixMediaService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+        HarmonixWidgetProvider.updateAllWidgets(this, title, artist, isPlaying);
     }
 
     private void updateNotification(String title, String artist, boolean isPlaying) {
@@ -118,6 +119,7 @@ public class HarmonixMediaService extends Service {
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, notification);
         }
+        HarmonixWidgetProvider.updateAllWidgets(this, title, artist, isPlaying);
     }
 
     private void stopForegroundServiceInternal() {
@@ -128,6 +130,7 @@ public class HarmonixMediaService extends Service {
         }
 
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
+        HarmonixWidgetProvider.updateAllWidgets(this, null, null, false);
         stopSelf();
     }
 

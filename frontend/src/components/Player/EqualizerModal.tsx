@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sliders, Zap, X, RotateCcw, Sparkles, Radio } from 'lucide-react';
+import { Sliders, Zap, X, RotateCcw, Sparkles, Radio, Smartphone } from 'lucide-react';
 import {
   equalizer,
   EQUALIZER_BANDS,
@@ -15,7 +15,7 @@ interface EqualizerModalProps {
 
 export const EqualizerModal: React.FC<EqualizerModalProps> = ({ isOpen, onClose }) => {
   const [eqState, setEqState] = useState(equalizer.getState());
-  const { crossfadeSeconds, setCrossfadeSeconds } = usePlayer();
+  const { crossfadeSeconds, setCrossfadeSeconds, shakeToShuffle, setShakeToShuffle } = usePlayer();
 
   useBackNavigation('equalizer_modal', isOpen, onClose, 70);
 
@@ -195,6 +195,33 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({ isOpen, onClose 
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Встряхивание для перемешивания (Shake to Shuffle) */}
+        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+              <Smartphone size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-bold block">Встряхнуть для перемешивания</span>
+              <span className="text-[11px] text-gray-400">
+                Переключает на случайный трек при резком взмахе
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShakeToShuffle(!shakeToShuffle)}
+            className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${
+              shakeToShuffle ? 'bg-purple-600' : 'bg-white/20'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                shakeToShuffle ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
         </div>
 
         {/* 5 вертикальных ползунков полос частот */}

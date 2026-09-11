@@ -40,6 +40,21 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <receiver
+            android:name=".HarmonixWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.harmonix.player.widget.PREV" />
+                <action android:name="com.harmonix.player.widget.PLAY_PAUSE" />
+                <action android:name="com.harmonix.player.widget.NEXT" />
+                <action android:name="com.harmonix.player.widget.UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/harmonix_widget_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->
