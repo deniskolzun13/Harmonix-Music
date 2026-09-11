@@ -1,0 +1,8 @@
+{
+  "yandex_token": null,
+  "vk_token": null,
+  "spotify_client_id": null,
+  "spotify_client_secret": null,
+  "spotify_refresh_token": null,
+  "spotify_redirect_uri": "http://localhost:8000/api/auth/spotify/callback"
+}
