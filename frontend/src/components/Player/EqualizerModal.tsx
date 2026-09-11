@@ -1,11 +1,12 @@
-﻿import React, { useState } from 'react';
-import { Sliders, Zap, X, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sliders, Zap, X, RotateCcw, Sparkles, Radio } from 'lucide-react';
 import {
   equalizer,
   EQUALIZER_BANDS,
   EQUALIZER_PRESETS,
 } from '../../services/audioEqualizer';
 import { useBackNavigation } from '../../services/backNavigation';
+import { usePlayer } from '../../context/PlayerContext';
 
 interface EqualizerModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface EqualizerModalProps {
 
 export const EqualizerModal: React.FC<EqualizerModalProps> = ({ isOpen, onClose }) => {
   const [eqState, setEqState] = useState(equalizer.getState());
+  const { crossfadeSeconds, setCrossfadeSeconds } = usePlayer();
 
   useBackNavigation('equalizer_modal', isOpen, onClose, 70);
 
@@ -42,6 +44,12 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({ isOpen, onClose 
 
   const handleReset = () => {
     equalizer.setPreset('flat');
+    setEqState(equalizer.getState());
+  };
+
+  const handleToggleNormalization = () => {
+    const next = !eqState.normalization;
+    equalizer.setNormalization(next);
     setEqState(equalizer.getState());
   };
 
@@ -134,6 +142,59 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({ isOpen, onClose 
             onChange={(e) => handleBassBoostChange(Number(e.target.value))}
             className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-40"
           />
+        </div>
+
+        {/* Нормализация громкости (Loudness Normalizer) */}
+        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-600/20 flex items-center justify-center text-purple-400">
+              <Sparkles size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white">Нормализация громкости</span>
+              <p className="text-[10px] text-gray-400">Выравнивает тихие и громкие треки</p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleNormalization}
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
+              eqState.normalization ? 'bg-purple-600' : 'bg-gray-700'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                eqState.normalization ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Плавный кроссфейд между треками */}
+        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-5">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Radio size={16} />
+              <span className="text-xs font-bold uppercase tracking-wider">Кроссфейд (Crossfade)</span>
+            </div>
+            <span className="text-xs font-bold text-cyan-400">
+              {crossfadeSeconds > 0 ? `${crossfadeSeconds} сек` : 'Выкл'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            {[0, 3, 5, 8].map((sec) => (
+              <button
+                key={sec}
+                onClick={() => setCrossfadeSeconds(sec)}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  crossfadeSeconds === sec
+                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/25'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                {sec === 0 ? 'Выкл' : `${sec}с`}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 5 вертикальных ползунков полос частот */}

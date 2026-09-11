@@ -23,6 +23,10 @@ interface PlayerContextType {
   sleepTimerOption: 'off' | 'end_of_track' | number;
   sleepTimerRemaining: number | null;
   setSleepTimer: (option: 'off' | 'end_of_track' | number) => void;
+  playbackRate: number;
+  setPlaybackRate: (rate: number) => void;
+  crossfadeSeconds: number;
+  setCrossfadeSeconds: (sec: number) => void;
   playTrack: (track: Track, newQueue?: Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -60,6 +64,50 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     sleepTimerOptionRef.current = sleepTimerOption;
   }, [sleepTimerOption]);
 
+  // Скорость воспроизведения (Playback Rate)
+  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('harmonix_playback_rate');
+      return saved ? parseFloat(saved) : 1.0;
+    } catch {
+      return 1.0;
+    }
+  });
+
+  const setPlaybackRate = (rate: number) => {
+    setPlaybackRateState(rate);
+    try {
+      localStorage.setItem('harmonix_playback_rate', rate.toString());
+    } catch {}
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  };
+
+  // Кроссфейд (секунды плавного перехода между треками)
+  const [crossfadeSeconds, setCrossfadeSecondsState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('harmonix_crossfade');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const crossfadeSecondsRef = useRef<number>(0);
+  useEffect(() => {
+    crossfadeSecondsRef.current = crossfadeSeconds;
+  }, [crossfadeSeconds]);
+
+  const isCrossfadingRef = useRef<boolean>(false);
+
+  const setCrossfadeSeconds = (sec: number) => {
+    setCrossfadeSecondsState(sec);
+    try {
+      localStorage.setItem('harmonix_crossfade', sec.toString());
+    } catch {}
+  };
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const savedVolumeRef = useRef<number>(1.0);
   const isDuckedRef = useRef<boolean>(false);
@@ -85,16 +133,47 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const audio = new Audio();
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
+    audio.playbackRate = playbackRate;
     audioRef.current = audio;
 
     // Инициализация Web Audio API эквалайзера и усиления баса
     equalizer.init(audio);
 
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+
+      // Кроссфейд: плавное затухание громкости в конце трека
+      const cf = crossfadeSecondsRef.current;
+      if (
+        cf > 0 &&
+        audio.duration > cf * 2 &&
+        audio.currentTime >= audio.duration - cf &&
+        !isCrossfadingRef.current &&
+        repeatMode !== 'one'
+      ) {
+        isCrossfadingRef.current = true;
+        const startVol = audio.volume;
+        const fadeStepMs = 100;
+        const totalSteps = (cf * 1000) / fadeStepMs;
+        const volStep = startVol / Math.max(1, totalSteps);
+        let step = 0;
+        const fadeTimer = setInterval(() => {
+          step++;
+          if (audioRef.current) {
+            audioRef.current.volume = Math.max(0, startVol - step * volStep);
+          }
+          if (step >= totalSteps || !audioRef.current || audioRef.current.paused) {
+            clearInterval(fadeTimer);
+          }
+        }, fadeStepMs);
+      }
+    };
+
     const handleLoadedMetadata = () => setDuration(audio.duration || 0);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => {
+      isCrossfadingRef.current = false;
       // Если включен режим «до конца текущего трека» — останавливаем воспроизведение
       if (sleepTimerOptionRef.current === 'end_of_track') {
         audio.pause();
@@ -318,10 +397,32 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } else {
           audioRef.current.src = `${getServerUrl()}/api/stream/${track.platform}/${track.id}`;
         }
+        audioRef.current.playbackRate = playbackRate;
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch((err) => {
-          console.warn('Автовоспроизведение заблокировано браузером до первого клика:', err);
-        });
+        isCrossfadingRef.current = false;
+
+        if (crossfadeSecondsRef.current > 0) {
+          const targetVol = savedVolumeRef.current;
+          audioRef.current.volume = 0;
+          audioRef.current.play().then(() => {
+            let inStep = 0;
+            const inSteps = 10;
+            const inTimer = setInterval(() => {
+              inStep++;
+              if (audioRef.current) {
+                audioRef.current.volume = Math.min(targetVol, (inStep / inSteps) * targetVol);
+              }
+              if (inStep >= inSteps) clearInterval(inTimer);
+            }, 100);
+          }).catch((err) => {
+            console.warn('Автовоспроизведение заблокировано браузером до первого клика:', err);
+          });
+        } else {
+          audioRef.current.volume = savedVolumeRef.current;
+          audioRef.current.play().catch((err) => {
+            console.warn('Автовоспроизведение заблокировано браузером до первого клика:', err);
+          });
+        }
       });
     }
   };
@@ -462,6 +563,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sleepTimerOption,
         sleepTimerRemaining,
         setSleepTimer,
+        playbackRate,
+        setPlaybackRate,
+        crossfadeSeconds,
+        setCrossfadeSeconds,
         playTrack,
         togglePlay,
         nextTrack,

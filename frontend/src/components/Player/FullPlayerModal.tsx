@@ -55,7 +55,16 @@ export const FullPlayerModal: React.FC = () => {
     playTrack,
     sleepTimerOption,
     sleepTimerRemaining,
+    playbackRate,
+    setPlaybackRate,
   } = usePlayer();
+
+  const RATES = [0.75, 1.0, 1.25, 1.5, 2.0];
+  const cyclePlaybackRate = () => {
+    const idx = RATES.indexOf(playbackRate);
+    const nextRate = idx === -1 || idx === RATES.length - 1 ? RATES[0] : RATES[idx + 1];
+    setPlaybackRate(nextRate);
+  };
 
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
@@ -473,11 +482,19 @@ export const FullPlayerModal: React.FC = () => {
             onChange={(e) => setVolume(Number(e.target.value))}
             className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-400 focus:outline-none"
           />
+          {/* Регулировка скорости воспроизведения */}
+          <button
+            onClick={cyclePlaybackRate}
+            className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-gray-300 active:scale-90 transition-all"
+            title="Скорость воспроизведения (нажмите для смены)"
+          >
+            {playbackRate}x
+          </button>
           <button
             onClick={() => setIsEqualizerOpen(true)}
             className="text-gray-400 hover:text-blue-400 active:scale-90 transition-all p-1"
             aria-label="Эквалайзер"
-            title="Эквалайзер и Bass Boost"
+            title="Эквалайзер, Бас и Студия звука"
           >
             <Sliders size={18} />
           </button>
