@@ -26,6 +26,7 @@ from app.services.transfer_service import transfer_service
 from app.services.transfer_db import get_transfer_history, init_transfer_db, cleanup_old_transfers
 from app.services.audio_proxy import proxy_audio_stream
 from app.services.url_importer import url_importer
+from app.services.lyrics_service import get_lyrics
 
 class ImportUrlRequest(BaseModel):
     url: str
@@ -253,6 +254,26 @@ async def proxy_cover(url: str = Query(...)):
         logger.warning(f"Ошибка проксирования обложки {url}: {e}")
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Не удалось загрузить обложку")
+
+
+@app.get("/api/lyrics")
+async def get_track_lyrics_endpoint(
+    artist: str = Query(...),
+    title: str = Query(...),
+    album: Optional[str] = Query(None),
+    duration: Optional[int] = Query(None),
+    track_id: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None)
+):
+    """Получение синхронизированного караоке-текста (LRC) или обычного текста песни"""
+    return await get_lyrics(
+        artist=artist,
+        title=title,
+        album=album,
+        duration=duration,
+        track_id=track_id,
+        platform=platform
+    )
 
 
 # Раздача мобильного фронтенда (PWA)

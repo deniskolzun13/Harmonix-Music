@@ -11,12 +11,14 @@ import {
   Volume2,
   VolumeX,
   ListMusic,
-  Heart
+  Heart,
+  Mic2
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
+import { LyricsView } from './LyricsView';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -48,11 +50,23 @@ export const FullPlayerModal: React.FC = () => {
   } = usePlayer();
 
   const [showQueue, setShowQueue] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
 
-  // Обработка системного жеста "Назад" для очереди и плеера
+  // Обработка системного жеста "Назад" для очереди, текста и плеера
+  useBackNavigation('player_lyrics', isFullPlayerOpen && showLyrics, () => setShowLyrics(false), 65);
   useBackNavigation('player_queue', isFullPlayerOpen && showQueue, () => setShowQueue(false), 60);
-  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue, () => setIsFullPlayerOpen(false), 50);
+  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue && !showLyrics, () => setIsFullPlayerOpen(false), 50);
+
+  const toggleLyrics = () => {
+    setShowLyrics((prev) => !prev);
+    if (showQueue) setShowQueue(false);
+  };
+
+  const toggleQueue = () => {
+    setShowQueue((prev) => !prev);
+    if (showLyrics) setShowLyrics(false);
+  };
 
   // Анимация перелистывания треков: 'next' | 'prev' | null
   const [switchAnim, setSwitchAnim] = useState<'next' | 'prev' | null>(null);
@@ -202,18 +216,33 @@ export const FullPlayerModal: React.FC = () => {
           </span>
           <p className="text-xs font-semibold text-blue-400">{platformName}</p>
         </div>
-        <button
-          onClick={() => setShowQueue(!showQueue)}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
-            showQueue ? 'bg-blue-600 text-white shadow-blue-600/30' : 'text-gray-200 hover:text-white bg-white/10'
-          }`}
-          aria-label="Очередь воспроизведения"
-        >
-          <ListMusic size={22} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleLyrics}
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+              showLyrics
+                ? 'bg-blue-600 text-white shadow-blue-600/30 ring-2 ring-blue-400/50'
+                : 'text-gray-200 hover:text-white bg-white/10'
+            }`}
+            aria-label="Текст песни и караоке"
+            title="Текст песни и караоке"
+          >
+            <Mic2 size={20} />
+          </button>
+          <button
+            onClick={toggleQueue}
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+              showQueue ? 'bg-blue-600 text-white shadow-blue-600/30' : 'text-gray-200 hover:text-white bg-white/10'
+            }`}
+            aria-label="Очередь воспроизведения"
+            title="Очередь воспроизведения"
+          >
+            <ListMusic size={22} />
+          </button>
+        </div>
       </div>
 
-      {/* Основной контент (Обложка со свайпом или Очередь) */}
+      {/* Основной контент (Обложка со свайпом, Очередь или Караоке) */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 min-h-0">
         {showQueue ? (
           /* Список очередей */
@@ -242,6 +271,13 @@ export const FullPlayerModal: React.FC = () => {
               ))}
             </div>
           </div>
+        ) : showLyrics ? (
+          /* Синхронизированный текст караоке */
+          <LyricsView
+            track={currentTrack}
+            currentTime={currentTime}
+            onSeek={seek}
+          />
         ) : (
           /* Крупная обложка с поддержкой свайпов влево/вправо */
           <div

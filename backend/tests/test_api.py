@@ -300,3 +300,16 @@ def test_transfer_confirm_and_reject():
     assert r_data["failed"] == 1
     assert r_data["results"][0]["status"] == "rejected"
 
+
+def test_lyrics_api():
+    # Проверка вызова эндпоинта текстов песен
+    resp = client.get("/api/lyrics?artist=Queen&title=Bohemian Rhapsody")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "synced_lyrics" in data
+    assert "plain_lyrics" in data
+    assert "source" in data
+    # Queen - Bohemian Rhapsody гарантированно имеет текст в LRCLIB
+    assert data["plain_lyrics"] is not None or data["synced_lyrics"] is not None
+
+
