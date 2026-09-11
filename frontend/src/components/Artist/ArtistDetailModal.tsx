@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ArtistSummary, Track } from '../../types';
 import { CoverImage } from '../Common/CoverImage';
+import { ArtistLinks } from '../Common/ArtistLinks';
 import { usePlayer } from '../../context/PlayerContext';
 import { getCachedTrackIds, saveTrackToCache, deleteCachedTrack } from '../../services/cacheManager';
 import { useBackNavigation } from '../../services/backNavigation';
@@ -317,7 +318,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                           {track.title}
                         </p>
                         <p className="text-[11px] text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
-                          <span>{track.album || artist.name}</span>
+                          <ArtistLinks artist={track.artist} title={track.title} />
                           {isCached && (
                             <span className="text-emerald-400 text-[10px]">
                               • 💾 Оффлайн

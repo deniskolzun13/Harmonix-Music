@@ -2,9 +2,10 @@ import React from 'react';
 import { Play, Pause, SkipForward } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
+import { ArtistLinks } from '../Common/ArtistLinks';
 
 export const MiniPlayer: React.FC = () => {
-  const { currentTrack, isPlaying, togglePlay, nextTrack, currentTime, duration, setIsFullPlayerOpen, openArtist } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, nextTrack, currentTime, duration, setIsFullPlayerOpen } = usePlayer();
 
   if (!currentTrack) return null;
 
@@ -54,15 +55,11 @@ export const MiniPlayer: React.FC = () => {
               </span>
               {platformBadge()}
             </div>
-            <p
-              onClick={(e) => {
-                e.stopPropagation();
-                openArtist(currentTrack.artist);
-              }}
-              className="text-xs text-gray-400 truncate mt-0.5 hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer inline-block"
-            >
-              {currentTrack.artist}
-            </p>
+            <ArtistLinks
+              artist={currentTrack.artist}
+              title={currentTrack.title}
+              className="text-xs text-gray-400 truncate mt-0.5 block"
+            />
           </div>
         </div>
 

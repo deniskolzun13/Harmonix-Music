@@ -42,6 +42,7 @@ import { ImportUrlModal } from '../Import/ImportUrlModal';
 import { ThemeModal } from '../Theme/ThemeModal';
 import { ArtistCard } from '../Artist/ArtistCard';
 import { AddTrackModal } from '../Track/AddTrackModal';
+import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 
 function formatDuration(sec: number): string {
@@ -829,15 +830,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                         {track.title}
                       </p>
                       <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openArtist(track.artist);
-                          }}
-                          className="hover:text-blue-400 active:text-blue-300 transition-colors cursor-pointer"
-                        >
-                          {track.artist}
-                        </span>
+                        <ArtistLinks artist={track.artist} title={track.title} />
                         {isCached && (
                           <span
                             className={`inline-flex items-center text-[10px] font-medium ${

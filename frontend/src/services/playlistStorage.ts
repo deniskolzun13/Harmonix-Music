@@ -202,6 +202,114 @@ export function deleteTrackFromPlaylist(playlistId: string, trackId: string): Sa
   }
 }
 
+const KNOWN_DUOS_AND_BANDS = new Set([
+  'artik & asti',
+  'hammali & navai',
+  'simon & garfunkel',
+  'kool & the gang',
+  'earth, wind & fire',
+  'florence + the machine',
+  'mumford & sons',
+  'above & beyond',
+  'crosby, stills, nash & young',
+  'bob marley & the wailers',
+  'tom petty and the heartbreakers',
+  'marina and the diamonds',
+  'iron & wine',
+  'hall & oates',
+  'blood, sweat & tears',
+  'chase & status',
+]);
+
+/**
+ * Разбивает строку исполнителей (например "MiyaGi, Andy Panda", "Eminem feat. Rihanna", "Баста & Гуф")
+ * на массив отдельных имен музыкантов.
+ */
+export function splitArtistNames(raw: string): string[] {
+  if (!raw || !raw.trim()) return [];
+  const trimmed = raw.trim();
+  if (KNOWN_DUOS_AND_BANDS.has(trimmed.toLowerCase())) {
+    return [trimmed];
+  }
+
+  // 1. Заменяем (feat. ...) / [ft. ...] / (при уч. ...)
+  let normalized = trimmed.replace(
+    /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring|with|vs\.?|при\s+уч\.?|уч\.?)\s+([^\)\]\}]+)[\)\]\}]/gi,
+    ', $1'
+  );
+
+  // 2. Заменяем разделители: feat / ft / featuring / with / vs / при уч
+  normalized = normalized.replace(
+    /(?:^|[\s,;([{/])(?:feat\.?|ft\.?|featuring|with|vs\.?|при\s+уч\.?|уч\.?)\s+/gi,
+    ', '
+  );
+
+  // 3. Заменяем слэши с пробелами (AC/DC не трогаем, т.к. без пробелов)
+  normalized = normalized.replace(/\s+\/+\s+/g, ', ');
+
+  // 4. Заменяем точки с запятой
+  normalized = normalized.replace(/;+/g, ', ');
+
+  const rawChunks = normalized.split(',').map((s) => s.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const chunk of rawChunks) {
+    if (KNOWN_DUOS_AND_BANDS.has(chunk.toLowerCase())) {
+      result.push(chunk);
+      continue;
+    }
+    // Проверяем & или and с пробелами
+    if (/\s+(?:&|and)\s+/i.test(chunk)) {
+      const subParts = chunk.split(/\s+(?:&|and)\s+/i).map((s) => s.trim()).filter(Boolean);
+      result.push(...subParts);
+    } else {
+      result.push(chunk);
+    }
+  }
+
+  // Очистка и дедупликация
+  const seen = new Set<string>();
+  const finalArtists: string[] = [];
+  for (const a of result) {
+    const clean = a.replace(/^[("'[{\s]+|[)"'}\]\s]+$/g, '').trim();
+    if (!clean) continue;
+    const lower = clean.toLowerCase();
+    if (lower === 'feat' || lower === 'ft' || lower === 'vs' || lower === 'with') continue;
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      finalArtists.push(clean);
+    }
+  }
+
+  return finalArtists.length > 0 ? finalArtists : [trimmed];
+}
+
+/**
+ * Извлекает всех артистов трека (из поля artist, а также из названия трека, если там указан feat/ft).
+ */
+export function extractAllTrackArtists(track: Track): string[] {
+  const result = new Set<string>();
+
+  if (track.artist) {
+    for (const name of splitArtistNames(track.artist)) {
+      result.add(name);
+    }
+  }
+
+  if (track.title) {
+    const titleMatch = track.title.match(
+      /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring|with|vs\.?|при\s+уч\.?|уч\.?)\s+([^\)\]\}]+)[\)\]\}]/i
+    );
+    if (titleMatch && titleMatch[1]) {
+      for (const name of splitArtistNames(titleMatch[1])) {
+        result.add(name);
+      }
+    }
+  }
+
+  return Array.from(result);
+}
+
 /**
  * Собирает и группирует всех музыкантов из сохраненных плейлистов и оффлайн-кэша
  */
@@ -230,31 +338,33 @@ export function getArtistsList(
     }
   }
 
-  // 3. Группируем по имени исполнителя (нормализация по нижнему регистру для связывания)
+  // 3. Группируем по каждому отдельному исполнителю (трек с несколькими артистами засчитывается каждому!)
   const artistMap = new Map<string, { displayName: string; cover_url?: string; tracks: Track[] }>();
 
   for (const track of allTracksMap.values()) {
-    const rawArtist = track.artist.trim();
-    if (!rawArtist) continue;
+    const trackArtists = extractAllTrackArtists(track);
+    if (trackArtists.length === 0) continue;
 
-    const lowerKey = rawArtist.toLowerCase();
-    const existing = artistMap.get(lowerKey);
+    for (const artistName of trackArtists) {
+      const lowerKey = artistName.toLowerCase();
+      const existing = artistMap.get(lowerKey);
 
-    if (existing) {
-      // Добавляем трек, если его еще нет
-      if (!existing.tracks.some((t) => t.id === track.id)) {
-        existing.tracks.push(track);
+      if (existing) {
+        // Добавляем трек, если его еще нет
+        if (!existing.tracks.some((t) => t.id === track.id)) {
+          existing.tracks.push(track);
+        }
+        // Берем лучшую обложку
+        if (!existing.cover_url && track.cover_url) {
+          existing.cover_url = track.cover_url;
+        }
+      } else {
+        artistMap.set(lowerKey, {
+          displayName: artistName,
+          cover_url: track.cover_url,
+          tracks: [track],
+        });
       }
-      // Берем лучшую обложку
-      if (!existing.cover_url && track.cover_url) {
-        existing.cover_url = track.cover_url;
-      }
-    } else {
-      artistMap.set(lowerKey, {
-        displayName: rawArtist,
-        cover_url: track.cover_url,
-        tracks: [track],
-      });
     }
   }
 
@@ -290,13 +400,29 @@ export function findArtistByName(
   const savedPlaylists = getSavedPlaylists();
   const allArtists = getArtistsList(savedPlaylists, cachedTracks);
 
-  const found = allArtists.find((a) => a.name.trim().toLowerCase() === lowerName);
+  let found = allArtists.find((a) => a.name.trim().toLowerCase() === lowerName);
+
+  // Если не найдено точное совпадение (например передали составную строку "Баста, Гуф"),
+  // ищем среди отдельных составляющих
+  if (!found) {
+    const parts = splitArtistNames(cleanName);
+    for (const p of parts) {
+      found = allArtists.find((a) => a.name.trim().toLowerCase() === p.toLowerCase());
+      if (found) break;
+    }
+  }
+
   let tracks = found ? [...found.tracks] : [];
   let cover_url = found?.cover_url;
 
   // Добавляем треки из контекста (например текущий трек или очередь воспроизведения)
   for (const t of extraTracks) {
-    if (t && t.artist && t.artist.trim().toLowerCase() === lowerName) {
+    if (!t) continue;
+    const tArtists = extractAllTrackArtists(t);
+    const matches = tArtists.some(
+      (a: string) => a.toLowerCase() === lowerName || (found && a.toLowerCase() === found.name.toLowerCase())
+    );
+    if (matches) {
       if (!tracks.some((x) => x.id === t.id)) {
         tracks.push(t);
         if (!cover_url && t.cover_url) {
