@@ -19,6 +19,9 @@ interface PlayerContextType {
   isFullPlayerOpen: boolean;
   selectedArtist: ArtistSummary | null;
   isArtistModalOpen: boolean;
+  sleepTimerOption: 'off' | 'end_of_track' | number;
+  sleepTimerRemaining: number | null;
+  setSleepTimer: (option: 'off' | 'end_of_track' | number) => void;
   playTrack: (track: Track, newQueue?: Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -46,6 +49,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState<ArtistSummary | null>(null);
   const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
+
+  // Состояния таймера сна (Sleep Timer)
+  const [sleepTimerOption, setSleepTimerOption] = useState<'off' | 'end_of_track' | number>('off');
+  const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
+  const sleepTimerOptionRef = useRef<'off' | 'end_of_track' | number>('off');
+
+  useEffect(() => {
+    sleepTimerOptionRef.current = sleepTimerOption;
+  }, [sleepTimerOption]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const savedVolumeRef = useRef<number>(1.0);
@@ -78,6 +90,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => {
+      // Если включен режим «до конца текущего трека» — останавливаем воспроизведение
+      if (sleepTimerOptionRef.current === 'end_of_track') {
+        audio.pause();
+        setIsPlaying(false);
+        setSleepTimerOption('off');
+        setSleepTimerRemaining(null);
+        return;
+      }
+
       if (repeatMode === 'one') {
         audio.currentTime = 0;
         audio.play().catch(console.error);
@@ -331,6 +352,59 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'));
   };
 
+  // Логика обратного отсчета таймера сна и плавного затухания (Fade Out)
+  useEffect(() => {
+    if (!isPlaying || typeof sleepTimerOption !== 'number' || sleepTimerRemaining === null) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setSleepTimerRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          // Время вышло — выключаем музыку и восстанавливаем уровень громкости
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.volume = savedVolumeRef.current;
+          }
+          setIsPlaying(false);
+          setSleepTimerOption('off');
+          return null;
+        }
+
+        const nextVal = prev - 1;
+        // Плавное затухание (fade out) за последние 20 секунд
+        if (nextVal <= 20 && audioRef.current) {
+          const ratio = Math.max(0, nextVal / 20);
+          audioRef.current.volume = savedVolumeRef.current * ratio;
+        }
+
+        return nextVal;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, sleepTimerOption, sleepTimerRemaining]);
+
+  const setSleepTimer = (option: 'off' | 'end_of_track' | number) => {
+    setSleepTimerOption(option);
+    if (option === 'off') {
+      setSleepTimerRemaining(null);
+      if (audioRef.current) {
+        audioRef.current.volume = savedVolumeRef.current;
+      }
+    } else if (option === 'end_of_track') {
+      setSleepTimerRemaining(null);
+      if (audioRef.current) {
+        audioRef.current.volume = savedVolumeRef.current;
+      }
+    } else if (typeof option === 'number') {
+      setSleepTimerRemaining(option * 60);
+      if (audioRef.current) {
+        audioRef.current.volume = savedVolumeRef.current;
+      }
+    }
+  };
+
   return (
     <PlayerContext.Provider
       value={{
@@ -345,6 +419,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isFullPlayerOpen,
         selectedArtist,
         isArtistModalOpen,
+        sleepTimerOption,
+        sleepTimerRemaining,
+        setSleepTimer,
         playTrack,
         togglePlay,
         nextTrack,

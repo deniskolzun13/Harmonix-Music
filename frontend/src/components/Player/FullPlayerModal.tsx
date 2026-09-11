@@ -12,13 +12,15 @@ import {
   VolumeX,
   ListMusic,
   Heart,
-  Mic2
+  Mic2,
+  Moon
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 import { LyricsView } from './LyricsView';
+import { SleepTimerModal } from './SleepTimerModal';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -47,11 +49,14 @@ export const FullPlayerModal: React.FC = () => {
     toggleRepeat,
     setIsFullPlayerOpen,
     playTrack,
+    sleepTimerOption,
+    sleepTimerRemaining,
   } = usePlayer();
 
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
 
   // Обработка системного жеста "Назад" для очереди, текста и плеера
   useBackNavigation('player_lyrics', isFullPlayerOpen && showLyrics, () => setShowLyrics(false), 65);
@@ -217,6 +222,31 @@ export const FullPlayerModal: React.FC = () => {
           <p className="text-xs font-semibold text-blue-400">{platformName}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Кнопка таймера сна */}
+          <button
+            onClick={() => setIsSleepTimerOpen(true)}
+            className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+              sleepTimerOption !== 'off'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-amber-500/20'
+                : 'text-gray-200 hover:text-white bg-white/10'
+            }`}
+            aria-label="Таймер сна"
+            title="Таймер сна"
+          >
+            <Moon size={19} />
+            {sleepTimerRemaining !== null && (
+              <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black font-extrabold text-[9px] px-1 rounded-full leading-tight shadow">
+                {Math.ceil(sleepTimerRemaining / 60)}м
+              </span>
+            )}
+            {sleepTimerOption === 'end_of_track' && (
+              <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black font-extrabold text-[9px] px-1 rounded-full leading-tight shadow">
+                1т
+              </span>
+            )}
+          </button>
+
+          {/* Кнопка караоке / текста песни */}
           <button
             onClick={toggleLyrics}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
@@ -229,6 +259,8 @@ export const FullPlayerModal: React.FC = () => {
           >
             <Mic2 size={20} />
           </button>
+
+          {/* Кнопка очереди */}
           <button
             onClick={toggleQueue}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
@@ -409,6 +441,12 @@ export const FullPlayerModal: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Модальное окно таймера сна */}
+      <SleepTimerModal
+        isOpen={isSleepTimerOpen}
+        onClose={() => setIsSleepTimerOpen(false)}
+      />
     </div>
   );
 };
