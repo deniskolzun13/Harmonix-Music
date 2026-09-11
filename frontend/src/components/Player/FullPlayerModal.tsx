@@ -13,7 +13,8 @@ import {
   ListMusic,
   Heart,
   Mic2,
-  Moon
+  Moon,
+  Sliders
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
@@ -21,6 +22,7 @@ import { ArtistLinks } from '../Common/ArtistLinks';
 import { useBackNavigation } from '../../services/backNavigation';
 import { LyricsView } from './LyricsView';
 import { SleepTimerModal } from './SleepTimerModal';
+import { EqualizerModal } from './EqualizerModal';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -57,6 +59,7 @@ export const FullPlayerModal: React.FC = () => {
   const [showLyrics, setShowLyrics] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
+  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
 
   // Обработка системного жеста "Назад" для очереди, текста и плеера
   useBackNavigation('player_lyrics', isFullPlayerOpen && showLyrics, () => setShowLyrics(false), 65);
@@ -421,7 +424,7 @@ export const FullPlayerModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Регулировка громкости */}
+        {/* Регулировка громкости и эквалайзер */}
         <div className="flex items-center gap-3 px-2">
           <button
             onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
@@ -439,6 +442,14 @@ export const FullPlayerModal: React.FC = () => {
             onChange={(e) => setVolume(Number(e.target.value))}
             className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-400 focus:outline-none"
           />
+          <button
+            onClick={() => setIsEqualizerOpen(true)}
+            className="text-gray-400 hover:text-blue-400 active:scale-90 transition-all p-1"
+            aria-label="Эквалайзер"
+            title="Эквалайзер и Bass Boost"
+          >
+            <Sliders size={18} />
+          </button>
         </div>
       </div>
 
@@ -446,6 +457,12 @@ export const FullPlayerModal: React.FC = () => {
       <SleepTimerModal
         isOpen={isSleepTimerOpen}
         onClose={() => setIsSleepTimerOpen(false)}
+      />
+
+      {/* Модальное окно эквалайзера */}
+      <EqualizerModal
+        isOpen={isEqualizerOpen}
+        onClose={() => setIsEqualizerOpen(false)}
       />
     </div>
   );

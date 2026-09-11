@@ -6,6 +6,7 @@ import { getServerUrl } from '../api';
 import { findArtistByName } from '../services/playlistStorage';
 import { BackgroundAudio } from 'capacitor-background-audio';
 import { AudioFocus } from '../plugins/audioFocus';
+import { equalizer } from '../services/audioEqualizer';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -83,7 +84,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
+    audio.crossOrigin = 'anonymous';
     audioRef.current = audio;
+
+    // Инициализация Web Audio API эквалайзера и усиления баса
+    equalizer.init(audio);
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => setDuration(audio.duration || 0);

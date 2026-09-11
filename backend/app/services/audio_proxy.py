@@ -42,6 +42,9 @@ async def proxy_audio_stream(platform: PlatformEnum, track_id: str, request: Req
         response_headers = {
             "Content-Type": upstream_resp.headers.get("content-type", "audio/mpeg"),
             "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
         }
         if "content-range" in upstream_resp.headers:
             response_headers["Content-Range"] = upstream_resp.headers["content-range"]
