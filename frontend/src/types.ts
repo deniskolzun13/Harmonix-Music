@@ -70,3 +70,11 @@ export interface TransferTask {
   results: TransferTrackResult[];
   message: string;
 }
+
+export interface ArtistSummary {
+  name: string;
+  cover_url?: string;
+  trackCount: number;
+  totalDuration: number;
+  tracks: Track[];
+}

@@ -1,4 +1,4 @@
-﻿import { Playlist, Track } from '../types';
+import { Playlist, Track, ArtistSummary } from '../types';
 import { getApiBase } from '../api';
 
 export interface SavedPlaylistRecord {
@@ -121,4 +121,158 @@ export function deleteSavedPlaylist(playlistId: string): SavedPlaylistRecord[] {
     console.error('Ошибка удаления плейлиста из localStorage:', e);
     return [];
   }
+}
+
+/**
+ * Добавляет отдельный трек в указанный плейлист или в специальный плейлист "Добавленные треки"
+ */
+export function addCustomTrack(track: Track, targetPlaylistId?: string): SavedPlaylistRecord[] {
+  try {
+    const normalizedTrack: Track = {
+      ...track,
+      stream_url: resolveStreamUrl(track.stream_url),
+    };
+
+    const current = getSavedPlaylists();
+    let targetIndex = -1;
+
+    if (targetPlaylistId) {
+      targetIndex = current.findIndex((p) => p.playlist.id === targetPlaylistId);
+    }
+
+    // Если целевой плейлист не найден, ищем или создаем "Добавленные треки"
+    if (targetIndex === -1) {
+      targetIndex = current.findIndex((p) => p.playlist.id === 'my_uploaded_tracks');
+    }
+
+    if (targetIndex >= 0) {
+      const targetRecord = current[targetIndex];
+      // Проверяем, нет ли уже такого трека
+      const exists = targetRecord.tracks.some((t) => t.id === normalizedTrack.id);
+      const newTracks = exists
+        ? targetRecord.tracks.map((t) => (t.id === normalizedTrack.id ? normalizedTrack : t))
+        : [normalizedTrack, ...targetRecord.tracks];
+
+      targetRecord.tracks = newTracks;
+      targetRecord.playlist.track_count = newTracks.length;
+      if (!targetRecord.playlist.cover_url && normalizedTrack.cover_url) {
+        targetRecord.playlist.cover_url = normalizedTrack.cover_url;
+      }
+    } else {
+      // Создаем новый плейлист "Добавленные треки"
+      const newRecord: SavedPlaylistRecord = {
+        playlist: {
+          id: 'my_uploaded_tracks',
+          title: 'Добавленные треки',
+          description: 'Треки, добавленные с устройства или по ссылке',
+          cover_url: normalizedTrack.cover_url,
+          track_count: 1,
+          platform: normalizedTrack.platform || 'local',
+        },
+        tracks: [normalizedTrack],
+        addedAt: Date.now(),
+      };
+      current.unshift(newRecord);
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    return current;
+  } catch (e) {
+    console.error('Ошибка добавления трека в плейлист:', e);
+    return getSavedPlaylists();
+  }
+}
+
+/**
+ * Удаляет трек из конкретного сохраненного плейлиста
+ */
+export function deleteTrackFromPlaylist(playlistId: string, trackId: string): SavedPlaylistRecord[] {
+  try {
+    const current = getSavedPlaylists();
+    const record = current.find((p) => p.playlist.id === playlistId);
+    if (record) {
+      record.tracks = record.tracks.filter((t) => t.id !== trackId);
+      record.playlist.track_count = record.tracks.length;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    }
+    return current;
+  } catch (e) {
+    console.error('Ошибка удаления трека из плейлиста:', e);
+    return getSavedPlaylists();
+  }
+}
+
+/**
+ * Собирает и группирует всех музыкантов из сохраненных плейлистов и оффлайн-кэша
+ */
+export function getArtistsList(
+  playlists: SavedPlaylistRecord[],
+  cachedTracks: Track[] = []
+): ArtistSummary[] {
+  const allTracksMap = new Map<string, Track>();
+
+  // 1. Добавляем треки из плейлистов
+  for (const pl of playlists) {
+    for (const track of pl.tracks) {
+      if (track && track.artist) {
+        allTracksMap.set(`${track.platform}-${track.id}`, track);
+      }
+    }
+  }
+
+  // 2. Добавляем треки из оффлайн-кэша
+  for (const track of cachedTracks) {
+    if (track && track.artist) {
+      const key = `${track.platform}-${track.id}`;
+      if (!allTracksMap.has(key)) {
+        allTracksMap.set(key, track);
+      }
+    }
+  }
+
+  // 3. Группируем по имени исполнителя (нормализация по нижнему регистру для связывания)
+  const artistMap = new Map<string, { displayName: string; cover_url?: string; tracks: Track[] }>();
+
+  for (const track of allTracksMap.values()) {
+    const rawArtist = track.artist.trim();
+    if (!rawArtist) continue;
+
+    const lowerKey = rawArtist.toLowerCase();
+    const existing = artistMap.get(lowerKey);
+
+    if (existing) {
+      // Добавляем трек, если его еще нет
+      if (!existing.tracks.some((t) => t.id === track.id)) {
+        existing.tracks.push(track);
+      }
+      // Берем лучшую обложку
+      if (!existing.cover_url && track.cover_url) {
+        existing.cover_url = track.cover_url;
+      }
+    } else {
+      artistMap.set(lowerKey, {
+        displayName: rawArtist,
+        cover_url: track.cover_url,
+        tracks: [track],
+      });
+    }
+  }
+
+  // 4. Формируем итоговый массив
+  const result: ArtistSummary[] = [];
+  for (const item of artistMap.values()) {
+    const totalDuration = item.tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+    result.push({
+      name: item.displayName,
+      cover_url: item.cover_url,
+      trackCount: item.tracks.length,
+      totalDuration,
+      tracks: item.tracks,
+    });
+  }
+
+  // Сортируем: сначала те, у кого больше треков, затем по алфавиту
+  result.sort((a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name));
+
+  return result;
 }

@@ -14,8 +14,10 @@ import {
   Clipboard,
   AlertCircle,
   FolderPlus,
+  Mic,
+  Plus,
 } from 'lucide-react';
-import { Track } from '../../types';
+import { Track, ArtistSummary } from '../../types';
 import { importPlaylistByUrl } from '../../api';
 import { usePlayer } from '../../context/PlayerContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -33,10 +35,15 @@ import {
   getSavedPlaylists,
   saveImportedPlaylist,
   deleteSavedPlaylist,
+  deleteTrackFromPlaylist,
+  getArtistsList,
   SavedPlaylistRecord,
 } from '../../services/playlistStorage';
 import { ImportUrlModal } from '../Import/ImportUrlModal';
 import { ThemeModal } from '../Theme/ThemeModal';
+import { ArtistCard } from '../Artist/ArtistCard';
+import { ArtistDetailModal } from '../Artist/ArtistDetailModal';
+import { AddTrackModal } from '../Track/AddTrackModal';
 
 function formatDuration(sec: number): string {
   if (!sec) return '0:00';
@@ -45,7 +52,7 @@ function formatDuration(sec: number): string {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-type LibraryTab = 'playlists' | 'cached';
+type LibraryTab = 'playlists' | 'artists' | 'cached';
 
 interface PlayerMainProps {
   onOpenSettings?: () => void;
@@ -89,6 +96,15 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
+  // Музыканты / Исполнители (Artist state)
+  const [selectedArtist, setSelectedArtist] = useState<ArtistSummary | null>(null);
+  const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
+  const [artistSearchQuery, setArtistSearchQuery] = useState('');
+
+  // Модальное окно добавления трека (локальный файл / ссылка / вручную)
+  const [isAddTrackModalOpen, setIsAddTrackModalOpen] = useState(false);
+  const [addTrackDefaultArtist, setAddTrackDefaultArtist] = useState<string | undefined>(undefined);
+
   // Загрузка сохраненных плейлистов из памяти
   const reloadSavedPlaylists = () => {
     const list = getSavedPlaylists();
@@ -123,6 +139,43 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   const currentSavedRecord = savedPlaylists.find((p) => p.playlist.id === activePlaylistId) || savedPlaylists[0];
   const activePlaylist = currentSavedRecord ? currentSavedRecord.playlist : null;
   const activeTracks = currentSavedRecord ? currentSavedRecord.tracks : [];
+
+  // Список всех музыкантов из сохраненных плейлистов и оффлайн-кэша
+  const artistsList = getArtistsList(savedPlaylists, cachedTracks);
+  const activeSelectedArtist = selectedArtist
+    ? artistsList.find((a) => a.name.toLowerCase() === selectedArtist.name.toLowerCase()) || selectedArtist
+    : null;
+
+  const displayedArtists = artistSearchQuery.trim()
+    ? artistsList.filter((a) => a.name.toLowerCase().includes(artistSearchQuery.toLowerCase()))
+    : artistsList;
+
+  // Воспроизведение всех треков списка
+  const handlePlayAllTracks = (tracks: Track[]) => {
+    if (!tracks || tracks.length === 0) return;
+    playTrack(tracks[0], tracks);
+  };
+
+  // Перемешать и воспроизвести
+  const handleShuffleTracks = (tracks: Track[]) => {
+    if (!tracks || tracks.length === 0) return;
+    const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+    playTrack(shuffled[0], shuffled);
+  };
+
+  // Универсальное удаление трека из медиатеки
+  const handleDeleteTrackGeneral = async (trackId: string) => {
+    for (const rec of savedPlaylists) {
+      if (rec.tracks.some((t) => t.id === trackId)) {
+        const updated = deleteTrackFromPlaylist(rec.playlist.id, trackId);
+        setSavedPlaylists(updated);
+      }
+    }
+    if (cachedTrackIds.has(trackId)) {
+      await deleteCachedTrack(trackId);
+      await refreshCacheInfo();
+    }
+  };
 
   // Быстрая вставка из буфера обмена
   const handlePasteQuickUrl = async () => {
@@ -291,22 +344,35 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
           <p className="text-xs text-gray-400 mt-0.5">Музыка по ссылкам и оффлайн-кэш на телефоне</p>
         </div>
 
-        {/* Кнопка смены темы и кнопка подробного импорта */}
-        <div className="flex items-center gap-2">
+        {/* Кнопка смены темы, добавления трека и импорта */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setIsThemeModalOpen(true)}
             title="Выбрать тему оформления"
-            className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
+            className="p-2 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
           >
             <Palette size={16} />
           </button>
 
           <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 active:scale-95 transition-all"
+            onClick={() => {
+              setAddTrackDefaultArtist(undefined);
+              setIsAddTrackModalOpen(true);
+            }}
+            title="Добавить трек (файл MP3, ссылка, вручную)"
+            className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
           >
-            <Link2 size={15} />
-            <span>+ Ссылка</span>
+            <Plus size={14} />
+            <span>+ Трек</span>
+          </button>
+
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            title="Импорт по ссылке"
+            className="flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 active:scale-95 transition-all"
+          >
+            <Link2 size={14} />
+            <span className="hidden sm:inline">Ссылка</span>
           </button>
         </div>
       </div>
@@ -392,11 +458,11 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
-      {/* Основные вкладки плеера: Мои плейлисты / Скачанные на телефон */}
-      <div className="grid grid-cols-2 gap-2 mb-5">
+      {/* Основные вкладки плеера: Плейлисты / Музыканты / Скачанные на телефон */}
+      <div className="grid grid-cols-3 gap-1.5 mb-5">
         <button
           onClick={() => setActiveTab('playlists')}
-          className={`py-2.5 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
+          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
             activeTab === 'playlists'
               ? theme === 'y2k'
                 ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
@@ -406,10 +472,29 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'theme-card text-gray-400 hover:text-white border-white/5'
           }`}
         >
-          <Music size={15} />
-          <span>Мои плейлисты</span>
-          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">
+          <Music size={14} />
+          <span className="truncate">Плейлисты</span>
+          <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
             {savedPlaylists.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('artists')}
+          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+            activeTab === 'artists'
+              ? theme === 'y2k'
+                ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
+                : theme === 'glass'
+                ? 'bg-purple-500/30 border-purple-400 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.4)] backdrop-blur-md'
+                : 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/25'
+              : 'theme-card text-gray-400 hover:text-white border-white/5'
+          }`}
+        >
+          <Mic size={14} />
+          <span className="truncate">Музыканты</span>
+          <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
+            {artistsList.length}
           </span>
         </button>
 
@@ -418,7 +503,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
             setActiveTab('cached');
             refreshCacheInfo();
           }}
-          className={`py-2.5 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
+          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
             activeTab === 'cached'
               ? theme === 'y2k'
                 ? 'bg-[#39ff14] border-[#39ff14] text-black font-mono shadow-[2px_2px_0px_#000]'
@@ -428,10 +513,10 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'theme-card text-gray-400 hover:text-white border-white/5'
           }`}
         >
-          <HardDrive size={15} />
-          <span>Скачанные 💾</span>
+          <HardDrive size={14} />
+          <span className="truncate">Скачанные</span>
           {cacheStats.count > 0 && (
-            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">
+            <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
               {cacheStats.count}
             </span>
           )}
@@ -562,7 +647,98 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
-      {/* Вкладка 2: СКАЧАННЫЕ НА ТЕЛЕФОН (ОФФЛАЙН) */}
+      {/* Вкладка 2: ИСПОЛНИТЕЛИ / МУЗЫКАНТЫ */}
+      {activeTab === 'artists' && (
+        <div className="space-y-4">
+          {/* Поиск музыканта */}
+          {artistsList.length > 2 && (
+            <div className="relative">
+              <input
+                type="text"
+                value={artistSearchQuery}
+                onChange={(e) => setArtistSearchQuery(e.target.value)}
+                placeholder="Поиск музыканта или группы..."
+                className="w-full theme-card rounded-2xl py-2 pl-9 pr-8 text-xs text-white placeholder-gray-500 focus:outline-none border border-white/10 focus:border-purple-500/50"
+              />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              {artistSearchQuery && (
+                <button
+                  onClick={() => setArtistSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Сетка карточек музыкантов */}
+          {displayedArtists.length === 0 ? (
+            <div className="theme-card rounded-3xl p-6 text-center border border-white/10 my-4 shadow-xl">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 mx-auto flex items-center justify-center mb-3">
+                <Mic size={24} />
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1">
+                {artistSearchQuery ? 'Музыканты не найдены' : 'Нет карточек музыкантов'}
+              </h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Загрузите MP3 файлы со смартфона или добавьте треки по ссылке — карточки музыкантов сформируются автоматически!
+              </p>
+              <button
+                onClick={() => {
+                  setAddTrackDefaultArtist(undefined);
+                  setIsAddTrackModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white text-xs font-bold inline-flex items-center gap-2 shadow-lg shadow-purple-600/20"
+              >
+                <Plus size={15} />
+                <span>+ Добавить трек</span>
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  Музыканты в вашей медиатеке ({displayedArtists.length})
+                </h2>
+                <button
+                  onClick={() => {
+                    setAddTrackDefaultArtist(undefined);
+                    setIsAddTrackModalOpen(true);
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                >
+                  <Plus size={13} />
+                  <span>+ Добавить</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {displayedArtists.map((art) => (
+                  <ArtistCard
+                    key={art.name}
+                    artist={art}
+                    onSelectArtist={(a) => {
+                      setSelectedArtist(a);
+                      setIsArtistModalOpen(true);
+                    }}
+                    onPlayArtist={(a) => handlePlayAllTracks(a.tracks)}
+                    onAddTrack={(a) => {
+                      setAddTrackDefaultArtist(a.name);
+                      setIsAddTrackModalOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Спейсер для полной прокрутки */}
+          <div className="h-36 w-full flex-shrink-0" aria-hidden="true" />
+        </div>
+      )}
+
+      {/* Вкладка 3: СКАЧАННЫЕ НА ТЕЛЕФОН (ОФФЛАЙН) */}
       {activeTab === 'cached' && (
         <div className="theme-card rounded-3xl p-4 border border-white/10 shadow-xl mb-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -593,8 +769,10 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
-      {/* Фильтр треков */}
-      {sourceTracks.length > 5 && (
+      {/* Фильтр и список треков (отображается для вкладок Плейлисты и Скачанные) */}
+      {activeTab !== 'artists' && (
+        <>
+          {sourceTracks.length > 5 && (
         <div className="relative my-3">
           <input
             type="text"
@@ -761,6 +939,39 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         {/* Спейсер для полной прокрутки выше мини-плеера и нижнего бара */}
         <div className="h-36 w-full flex-shrink-0" aria-hidden="true" />
       </div>
+    </>
+  )}
+
+      {/* Экран музыканта (ArtistDetailModal) */}
+      <ArtistDetailModal
+        artist={activeSelectedArtist}
+        isOpen={isArtistModalOpen}
+        onClose={() => setIsArtistModalOpen(false)}
+        onPlayTrack={(track, queue) => playTrack(track, queue)}
+        onPlayAll={(tracks) => handlePlayAllTracks(tracks)}
+        onShufflePlay={(tracks) => handleShuffleTracks(tracks)}
+        onAddTrackToArtist={(artistName) => {
+          setAddTrackDefaultArtist(artistName);
+          setIsAddTrackModalOpen(true);
+        }}
+        cachedTrackIds={cachedTrackIds}
+        onDownloadTrack={(track) => handleDownloadSingleTrack({ stopPropagation: () => {} } as any, track)}
+        onDeleteTrack={(trackId) => handleDeleteTrackGeneral(trackId)}
+      />
+
+      {/* Модальное окно добавления треков (AddTrackModal) */}
+      <AddTrackModal
+        isOpen={isAddTrackModalOpen}
+        onClose={() => setIsAddTrackModalOpen(false)}
+        defaultArtist={addTrackDefaultArtist}
+        onTrackAdded={(track) => {
+          reloadSavedPlaylists();
+          refreshCacheInfo();
+          if (track) {
+            playTrack(track, [track]);
+          }
+        }}
+      />
 
       {/* Модальное окно импорта по ссылке */}
       <ImportUrlModal
