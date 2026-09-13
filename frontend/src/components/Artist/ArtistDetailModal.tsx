@@ -12,13 +12,21 @@ import {
   Clock,
   Search,
   Loader2,
+  Users,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Tag,
 } from 'lucide-react';
-import { ArtistSummary, Track } from '../../types';
+import { ArtistSummary, Track, RelatedArtist, ArtistProfileInfo } from '../../types';
 import { CoverImage } from '../Common/CoverImage';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { usePlayer } from '../../context/PlayerContext';
 import { getCachedTrackIds, saveTrackToCache, deleteCachedTrack, cacheMultipleTracks } from '../../services/cacheManager';
 import { useBackNavigation } from '../../services/backNavigation';
+import { getSpotifyRelatedArtists } from '../../api';
+import { fetchArtistProfile, getCachedArtistProfile } from '../../services/artistService';
 
 interface ArtistDetailModalProps {
   artist: ArtistSummary | null;
@@ -58,9 +66,17 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
   onDownloadTrack: propDownload,
   onDeleteTrack: propDelete,
 }) => {
-  const { currentTrack, isPlaying, togglePlay, playTrack } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, playTrack, openArtist } = usePlayer();
   const [filterQuery, setFilterQuery] = useState('');
   const [localCachedIds, setLocalCachedIds] = useState<Set<string>>(new Set());
+  const [relatedArtists, setRelatedArtists] = useState<RelatedArtist[]>([]);
+
+  // Профиль музыканта (оригинальное фото, биография, жанры)
+  const [artistProfile, setArtistProfile] = useState<ArtistProfileInfo | null>(() =>
+    artist?.name ? getCachedArtistProfile(artist.name) : null
+  );
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isBioExpanded, setIsBioExpanded] = useState(false);
 
   // Перехват системного жеста "Назад" на Android для закрытия карточки музыканта
   useBackNavigation('artist_detail_modal', isOpen, onClose, 55);
@@ -70,6 +86,33 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
       getCachedTrackIds().then(setLocalCachedIds).catch(() => {});
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && artist?.name) {
+      // 1. Похожие артисты
+      getSpotifyRelatedArtists(artist.name, 10)
+        .then((res) => setRelatedArtists(res || []))
+        .catch(() => setRelatedArtists([]));
+
+      // 2. Оригинальный профиль музыканта (фото, описание, жанры)
+      const cached = getCachedArtistProfile(artist.name);
+      if (cached && (cached.photo_url || cached.description)) {
+        setArtistProfile(cached);
+      } else {
+        setIsLoadingProfile(true);
+        fetchArtistProfile(artist.name)
+          .then((res) => {
+            if (res) setArtistProfile(res);
+          })
+          .catch((e) => console.warn('Ошибка загрузки профиля артиста:', e))
+          .finally(() => setIsLoadingProfile(false));
+      }
+    } else {
+      setRelatedArtists([]);
+      setArtistProfile(null);
+      setIsBioExpanded(false);
+    }
+  }, [isOpen, artist?.name]);
 
   if (!isOpen || !artist) return null;
 
@@ -148,17 +191,26 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
     }
   };
 
+  const originalPhoto = artistProfile?.photo_url || artist.photo_url;
+  const displayCover = originalPhoto || artist.cover_url;
+  const bannerUrl = artistProfile?.banner_url || artist.banner_url || displayCover;
+  const description = artistProfile?.description || artist.description;
+  const shortDesc = artistProfile?.short_description || artist.short_description;
+  const genres = (artistProfile?.genres && artistProfile.genres.length > 0)
+    ? artistProfile.genres
+    : (artist.genres || []);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0f14] text-white overflow-hidden animate-fadeIn select-none">
-      {/* 1. Декоративный фоновый размытый баннер */}
-      {artist.cover_url && (
-        <div className="absolute top-0 left-0 right-0 h-72 overflow-hidden pointer-events-none opacity-30 z-0">
+      {/* 1. Декоративный фоновый размытый баннер (настоящее студийное фото) */}
+      {bannerUrl && (
+        <div className="absolute top-0 left-0 right-0 h-80 overflow-hidden pointer-events-none z-0">
           <img
-            src={artist.cover_url}
+            src={bannerUrl}
             alt=""
-            className="w-full h-full object-cover blur-[60px] scale-125"
+            className="w-full h-full object-cover blur-[50px] scale-125 opacity-35 brightness-75 transition-all duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d0f14]/80 to-[#0d0f14]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d0f14]/85 to-[#0d0f14]" />
         </div>
       )}
 
@@ -186,16 +238,14 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
       <div className="relative z-10 flex-1 overflow-y-auto px-4 pt-4 pb-44 space-y-5">
         {/* Карточка профиля артиста */}
         <div className="flex flex-col items-center text-center">
-          {/* Крупный аватар */}
-          <div className="relative w-32 h-32 rounded-full p-1.5 bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 shadow-2xl mb-3.5">
-            <div className="w-full h-full rounded-full overflow-hidden bg-[#181a20] flex items-center justify-center">
-              {artist.cover_url ? (
-                <CoverImage
-                  src={artist.cover_url}
+          {/* Оригинальный студийный портрет артиста */}
+          <div className="relative w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-cyan-500 via-blue-500 to-indigo-600 shadow-2xl shadow-blue-500/20 mb-3 group">
+            <div className="w-full h-full rounded-full overflow-hidden bg-[#181a20] flex items-center justify-center relative">
+              {displayCover ? (
+                <img
+                  src={displayCover}
                   alt={artist.name}
-                  iconSize={36}
-                  fallbackType="music"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-indigo-900 text-blue-300">
@@ -203,13 +253,42 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                 </div>
               )}
             </div>
+            {originalPhoto && (
+              <div
+                title="Оригинальное студийное фото"
+                className="absolute bottom-0 right-0.5 bg-blue-600 text-white p-1.5 rounded-full border-2 border-[#0d0f14] shadow-md flex items-center justify-center"
+              >
+                <Sparkles size={12} className="text-cyan-300" />
+              </div>
+            )}
           </div>
 
           <h2 className="text-2xl font-black text-white tracking-tight px-4 leading-tight">
             {artist.name}
           </h2>
 
-          <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400 font-medium">
+          {shortDesc && (
+            <p className="text-xs text-cyan-400 font-medium mt-1 px-4 max-w-md line-clamp-1">
+              {shortDesc}
+            </p>
+          )}
+
+          {/* Жанры музыканта */}
+          {genres.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2 px-4 max-w-md">
+              {genres.slice(0, 4).map((g) => (
+                <span
+                  key={g}
+                  className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-medium text-gray-300 flex items-center gap-1"
+                >
+                  <Tag size={10} className="text-blue-400" />
+                  <span>{g}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 mt-2 text-xs text-gray-400 font-medium">
             <span className="bg-white/10 px-2.5 py-0.5 rounded-full text-blue-300">
               {artist.trackCount}{' '}
               {artist.trackCount === 1
@@ -226,7 +305,7 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
           </div>
 
           {/* Кнопки действий: Слушать всё, Перемешать, Добавить трек */}
-          <div className="flex items-center gap-2.5 mt-5 w-full max-w-sm justify-center">
+          <div className="flex items-center gap-2.5 mt-4 w-full max-w-sm justify-center">
             <button
               onClick={() => handlePlayAll(tracks)}
               disabled={tracks.length === 0}
@@ -278,6 +357,44 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
               </button>
             )}
           </div>
+
+          {/* Блок оригинального описания и биографии музыканта */}
+          {isLoadingProfile && !description ? (
+            <div className="w-full max-w-md mx-auto mt-4 px-1">
+              <div className="bg-[#151821]/70 backdrop-blur-md border border-white/5 rounded-2xl p-3.5 animate-pulse space-y-2 text-left">
+                <div className="h-3 bg-white/10 rounded w-1/4" />
+                <div className="h-2.5 bg-white/5 rounded w-full" />
+                <div className="h-2.5 bg-white/5 rounded w-5/6" />
+              </div>
+            </div>
+          ) : description ? (
+            <div className="w-full max-w-md mx-auto mt-4 px-1 text-left">
+              <div className="bg-[#151821]/80 backdrop-blur-md border border-white/10 rounded-2xl p-3.5 shadow-lg transition-all">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Info size={14} className="text-cyan-400 flex-shrink-0" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-300">
+                    Об исполнителе
+                  </h3>
+                </div>
+                <p
+                  className={`text-xs text-gray-300 leading-relaxed whitespace-pre-line ${
+                    isBioExpanded ? '' : 'line-clamp-3'
+                  }`}
+                >
+                  {description}
+                </p>
+                {description.length > 160 && (
+                  <button
+                    onClick={() => setIsBioExpanded(!isBioExpanded)}
+                    className="mt-2 text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors py-0.5"
+                  >
+                    <span>{isBioExpanded ? 'Свернуть' : 'Читать полностью'}</span>
+                    {isBioExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Поиск внутри треков артиста (если треков много) */}
@@ -438,6 +555,41 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Похожие исполнители от Spotify */}
+          {relatedArtists.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-white/10 pb-4">
+              <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
+                <Users size={14} className="text-emerald-400" />
+                Похожие исполнители (Spotify)
+              </h4>
+              <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar overscroll-x-contain">
+                {relatedArtists.map((rel) => (
+                  <div
+                    key={rel.id}
+                    onClick={() => openArtist(rel.name)}
+                    className="flex-shrink-0 w-24 p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-center cursor-pointer group"
+                  >
+                    <div className="w-14 h-14 mx-auto rounded-full overflow-hidden mb-2 bg-black/40 border border-white/10 group-hover:border-emerald-500/50 transition-all shadow-md">
+                      {rel.cover_url ? (
+                        <img src={rel.cover_url} alt={rel.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-emerald-400 bg-emerald-500/10">
+                          <Users size={18} />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-semibold text-white truncate group-hover:text-emerald-300 transition-colors">
+                      {rel.name}
+                    </p>
+                    <p className="text-[9px] text-gray-400 truncate mt-0.5">
+                      {rel.genres?.[0] || 'Артист'}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

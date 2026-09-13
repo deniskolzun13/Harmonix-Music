@@ -22,6 +22,7 @@ import {
   ArrowUp,
   ArrowDown,
   TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
@@ -58,6 +59,7 @@ import { CreatePlaylistModal } from '../Playlists/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../Playlists/AddToPlaylistModal';
 import { StatsModal } from '../Stats/StatsModal';
 import { ArtistLinks } from '../Common/ArtistLinks';
+import { RecommendationsTab } from '../Recommendations/RecommendationsTab';
 import { useBackNavigation } from '../../services/backNavigation';
 
 function formatDuration(sec: number): string {
@@ -67,7 +69,7 @@ function formatDuration(sec: number): string {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-type LibraryTab = 'playlists' | 'artists' | 'cached';
+type LibraryTab = 'playlists' | 'artists' | 'cached' | 'recommendations';
 
 interface PlayerMainProps {
   onOpenSettings?: () => void;
@@ -539,11 +541,11 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
-      {/* Основные вкладки плеера: Плейлисты / Музыканты / Скачанные на телефон */}
-      <div className="grid grid-cols-3 gap-1.5 mb-5">
+      {/* Основные вкладки плеера: Плейлисты / Музыканты / Скачанные / Волна */}
+      <div className="grid grid-cols-4 gap-1 mb-5">
         <button
           onClick={() => setActiveTab('playlists')}
-          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
             activeTab === 'playlists'
               ? theme === 'glass'
                 ? 'bg-blue-500/30 border-blue-400 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.4)] backdrop-blur-md'
@@ -551,16 +553,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'theme-card text-gray-400 hover:text-white border-white/5'
           }`}
         >
-          <Music size={14} />
+          <Music size={13} />
           <span className="truncate">Плейлисты</span>
-          <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
-            {savedPlaylists.length}
-          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('artists')}
-          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
             activeTab === 'artists'
               ? theme === 'glass'
                 ? 'bg-purple-500/30 border-purple-400 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.4)] backdrop-blur-md'
@@ -568,11 +567,8 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'theme-card text-gray-400 hover:text-white border-white/5'
           }`}
         >
-          <Mic size={14} />
-          <span className="truncate">Музыканты</span>
-          <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
-            {artistsList.length}
-          </span>
+          <Mic size={13} />
+          <span className="truncate">Артисты</span>
         </button>
 
         <button
@@ -580,7 +576,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
             setActiveTab('cached');
             refreshCacheInfo();
           }}
-          className={`py-2 px-1.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
             activeTab === 'cached'
               ? theme === 'glass'
                 ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.4)] backdrop-blur-md'
@@ -588,13 +584,22 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'theme-card text-gray-400 hover:text-white border-white/5'
           }`}
         >
-          <HardDrive size={14} />
-          <span className="truncate">Скачанные</span>
-          {cacheStats.count > 0 && (
-            <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full font-mono">
-              {cacheStats.count}
-            </span>
-          )}
+          <HardDrive size={13} />
+          <span className="truncate">Кэш</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('recommendations')}
+          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
+            activeTab === 'recommendations'
+              ? theme === 'glass'
+                ? 'bg-amber-500/30 border-amber-400 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.4)] backdrop-blur-md'
+                : 'bg-gradient-to-r from-amber-500 to-rose-500 border-amber-400 text-black shadow-lg shadow-amber-500/25'
+              : 'theme-card text-gray-400 hover:text-white border-white/5'
+          }`}
+        >
+          <Sparkles size={13} className={activeTab === 'recommendations' ? 'animate-pulse' : ''} />
+          <span className="truncate">Волна</span>
         </button>
       </div>
 
@@ -1145,6 +1150,10 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     </>
   )}
 
+      {/* Вкладка 4: РЕКОМЕНДАЦИИ И МОЯ ВОЛНА */}
+      {activeTab === 'recommendations' && (
+        <RecommendationsTab onOpenSettings={onOpenSettings} />
+      )}
 
       {/* Скрытый input для выбора аудиофайлов с устройства */}
       <input

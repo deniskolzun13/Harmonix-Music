@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
-from app.models import Playlist, Track, PlatformEnum
+from app.models import Playlist, Track, PlatformEnum, RelatedArtist
 
 
 class BasePlatformAdapter(ABC):
@@ -50,3 +50,19 @@ class BasePlatformAdapter(ABC):
     def get_stream_url(self, track_id: str) -> Optional[str]:
         """Возвращает прямую ссылку на аудиопоток для воспроизведения"""
         pass
+
+    def get_wave_tracks(self, limit: int = 20) -> List[Track]:
+        """Возвращает поток персональных треков («Моя волна»)"""
+        return []
+
+    def get_similar_tracks(self, track_id: str, limit: int = 20) -> List[Track]:
+        """Возвращает треки, похожие на указанный трек"""
+        return []
+
+    def get_personal_recommendations(self, limit: int = 30) -> List[Track]:
+        """Возвращает персональные рекомендации пользователя"""
+        return []
+
+    def get_related_artists(self, artist_id_or_name: str, limit: int = 15) -> List[RelatedArtist]:
+        """Возвращает похожих исполнителей"""
+        return []

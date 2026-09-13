@@ -32,6 +32,15 @@ class Playlist(BaseModel):
     platform: PlatformEnum
 
 
+class RelatedArtist(BaseModel):
+    id: str
+    name: str
+    cover_url: Optional[str] = None
+    genres: List[str] = Field(default_factory=list)
+    popularity: Optional[int] = None
+    platform: PlatformEnum = PlatformEnum.SPOTIFY
+
+
 class AuthConfig(BaseModel):
     yandex_token: Optional[str] = None
     vk_token: Optional[str] = None

@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Mic, Plus } from 'lucide-react';
 import { ArtistSummary } from '../../types';
 import { CoverImage } from '../Common/CoverImage';
+import { getCachedArtistProfile } from '../../services/artistService';
 
 interface ArtistCardProps {
   artist: ArtistSummary;
@@ -22,6 +23,9 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
   onPlayArtist,
   onAddTrack,
 }) => {
+  const profile = getCachedArtistProfile(artist.name);
+  const photoUrl = artist.photo_url || profile?.photo_url || artist.cover_url;
+  const genres = artist.genres || profile?.genres;
   return (
     <div
       onClick={() => onSelectArtist(artist)}
@@ -33,9 +37,9 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
       {/* Круглый аватар музыканта */}
       <div className="relative w-24 h-24 mb-3 rounded-full p-1 bg-gradient-to-tr from-blue-500/40 via-purple-500/40 to-indigo-500/40 group-hover:from-blue-500 group-hover:to-indigo-500 transition-all shadow-xl">
         <div className="w-full h-full rounded-full overflow-hidden bg-[#181a20] relative flex items-center justify-center">
-          {artist.cover_url ? (
+          {photoUrl ? (
             <CoverImage
-              src={artist.cover_url}
+              src={photoUrl}
               alt={artist.name}
               iconSize={28}
               fallbackType="music"
@@ -66,8 +70,15 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
         {artist.name}
       </h3>
 
+      {/* Бейдж жанра музыканта */}
+      {genres && genres.length > 0 && (
+        <span className="inline-block text-[10px] text-blue-300/90 font-medium px-2 py-0.5 mt-1 rounded-full bg-blue-500/10 border border-blue-500/20 truncate max-w-[90%]">
+          {genres[0]}
+        </span>
+      )}
+
       {/* Количество треков и длительность */}
-      <p className="text-[11px] text-gray-400 mt-0.5 font-medium">
+      <p className="text-[11px] text-gray-400 mt-1 font-medium">
         {artist.trackCount}{' '}
         {artist.trackCount === 1
           ? 'трек'

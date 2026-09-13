@@ -30,6 +30,7 @@ interface PlayerContextType {
   shakeToShuffle: boolean;
   setShakeToShuffle: (enabled: boolean) => void;
   playTrack: (track: Track, newQueue?: Track[]) => void;
+  addToQueue: (trackOrTracks: Track | Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -466,6 +467,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const addToQueue = (trackOrTracks: Track | Track[]) => {
+    const toAdd = Array.isArray(trackOrTracks) ? trackOrTracks : [trackOrTracks];
+    setQueue((prev) => {
+      const existingIds = new Set(prev.map((t) => t.id));
+      const filtered = toAdd.filter((t) => !existingIds.has(t.id));
+      return [...prev, ...filtered];
+    });
+  };
+
   const togglePlay = () => {
     if (!audioRef.current || !currentTrack) return;
     if (isPlaying) {
@@ -740,6 +750,7 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
         shakeToShuffle,
         setShakeToShuffle,
         playTrack,
+        addToQueue,
         togglePlay,
         nextTrack,
         prevTrack,

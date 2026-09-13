@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional, Tuple
-from app.models import Playlist, Track, PlatformEnum
+from app.models import Playlist, Track, PlatformEnum, RelatedArtist
 from app.platforms.base import BasePlatformAdapter
 
 logger = logging.getLogger("harmonix.demo")
@@ -255,3 +255,20 @@ class DemoPlatformAdapter(BasePlatformAdapter):
             if t.id == track_id and t.stream_url:
                 return t.stream_url
         return "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+
+    def get_wave_tracks(self, limit: int = 20) -> List[Track]:
+        return self.tracks_db[:limit]
+
+    def get_similar_tracks(self, track_id: str, limit: int = 20) -> List[Track]:
+        return [t for t in self.tracks_db if t.id != track_id][:limit]
+
+    def get_personal_recommendations(self, limit: int = 30) -> List[Track]:
+        return self.tracks_db[:limit]
+
+    def get_related_artists(self, artist_id_or_name: str, limit: int = 15) -> List[RelatedArtist]:
+        return [
+            RelatedArtist(id="rel_1", name="The Weeknd", genres=["r&b", "pop"], popularity=95, platform=PlatformEnum.SPOTIFY),
+            RelatedArtist(id="rel_2", name="Daft Punk", genres=["electro", "synthpop"], popularity=88, platform=PlatformEnum.SPOTIFY),
+            RelatedArtist(id="rel_3", name="M83", genres=["shoegaze", "synthpop"], popularity=80, platform=PlatformEnum.SPOTIFY),
+            RelatedArtist(id="rel_4", name="Linkin Park", genres=["rock", "alternative"], popularity=92, platform=PlatformEnum.SPOTIFY),
+        ][:limit]

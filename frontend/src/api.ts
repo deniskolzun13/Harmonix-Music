@@ -1,4 +1,4 @@
-import { AuthConfig, AuthStatus, NetworkInfo, Playlist, Track, TransferTask, TransferHistoryResponse, Platform } from './types';
+import { AuthConfig, AuthStatus, NetworkInfo, Playlist, Track, TransferTask, TransferHistoryResponse, Platform, RelatedArtist } from './types';
 import { importPlaylistStandalone } from './services/standaloneImporter';
 
 export function isNativeMobile(): boolean {
@@ -224,5 +224,48 @@ export async function importPlaylistByUrl(url: string): Promise<{ playlist: Play
 export function getCoverProxyUrl(coverUrl: string): string {
   const base = getApiBase().replace(/\/api$/, '');
   return `${base}/api/cover-proxy?url=${encodeURIComponent(coverUrl)}`;
+}
+
+export async function getYandexWaveTracks(limit: number = 20): Promise<Track[]> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/recommendations/yandex/wave?limit=${limit}`);
+  if (!res.ok) throw new Error('Не удалось загрузить Мою волну');
+  const tracks: Track[] = await res.json();
+  const server = base.replace(/\/api$/, '');
+  return tracks.map(t => ({
+    ...t,
+    stream_url: t.stream_url?.startsWith('http') ? t.stream_url : `${server}${t.stream_url}`
+  }));
+}
+
+export async function getYandexSimilarTracks(trackId: string, limit: number = 20): Promise<Track[]> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/recommendations/yandex/similar/${encodeURIComponent(trackId)}?limit=${limit}`);
+  if (!res.ok) throw new Error('Не удалось загрузить похожие треки');
+  const tracks: Track[] = await res.json();
+  const server = base.replace(/\/api$/, '');
+  return tracks.map(t => ({
+    ...t,
+    stream_url: t.stream_url?.startsWith('http') ? t.stream_url : `${server}${t.stream_url}`
+  }));
+}
+
+export async function getVkPersonalRecommendations(limit: number = 30): Promise<Track[]> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/recommendations/vk/personal?limit=${limit}`);
+  if (!res.ok) throw new Error('Не удалось загрузить рекомендации VK');
+  const tracks: Track[] = await res.json();
+  const server = base.replace(/\/api$/, '');
+  return tracks.map(t => ({
+    ...t,
+    stream_url: t.stream_url?.startsWith('http') ? t.stream_url : `${server}${t.stream_url}`
+  }));
+}
+
+export async function getSpotifyRelatedArtists(artist: string, limit: number = 15): Promise<RelatedArtist[]> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/recommendations/spotify/related-artists?artist=${encodeURIComponent(artist)}&limit=${limit}`);
+  if (!res.ok) throw new Error('Не удалось загрузить похожих артистов Spotify');
+  return res.json();
 }
 

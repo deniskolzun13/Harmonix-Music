@@ -1,5 +1,6 @@
 import { Playlist, Track, ArtistSummary } from '../types';
 import { getApiBase } from '../api';
+import { getCachedArtistProfile } from './artistService';
 
 export interface SavedPlaylistRecord {
   playlist: Playlist;
@@ -372,9 +373,15 @@ export function getArtistsList(
   const result: ArtistSummary[] = [];
   for (const item of artistMap.values()) {
     const totalDuration = item.tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+    const cachedProfile = getCachedArtistProfile(item.displayName);
     result.push({
       name: item.displayName,
-      cover_url: item.cover_url,
+      cover_url: cachedProfile?.photo_url || item.cover_url,
+      photo_url: cachedProfile?.photo_url,
+      banner_url: cachedProfile?.banner_url,
+      description: cachedProfile?.description,
+      short_description: cachedProfile?.short_description,
+      genres: cachedProfile?.genres,
       trackCount: item.tracks.length,
       totalDuration,
       tracks: item.tracks,
@@ -433,10 +440,16 @@ export function findArtistByName(
   }
 
   const totalDuration = tracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+  const cachedProfile = getCachedArtistProfile(cleanName);
 
   return {
     name: found ? found.name : cleanName,
-    cover_url: cover_url,
+    cover_url: cachedProfile?.photo_url || found?.photo_url || cover_url,
+    photo_url: cachedProfile?.photo_url || found?.photo_url,
+    banner_url: cachedProfile?.banner_url || found?.banner_url,
+    description: cachedProfile?.description || found?.description,
+    short_description: cachedProfile?.short_description || found?.short_description,
+    genres: cachedProfile?.genres || found?.genres,
     trackCount: tracks.length,
     totalDuration,
     tracks,

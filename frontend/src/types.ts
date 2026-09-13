@@ -83,7 +83,30 @@ export interface TransferHistoryResponse {
 export interface ArtistSummary {
   name: string;
   cover_url?: string;
+  photo_url?: string;
+  banner_url?: string;
+  description?: string;
+  short_description?: string;
+  genres?: string[];
   trackCount: number;
   totalDuration: number;
   tracks: Track[];
+}
+
+export interface ArtistProfileInfo {
+  name: string;
+  photo_url?: string;
+  banner_url?: string;
+  description?: string;
+  short_description?: string;
+  genres?: string[];
+}
+
+export interface RelatedArtist {
+  id: string;
+  name: string;
+  cover_url?: string;
+  genres: string[];
+  popularity?: number;
+  platform: Platform;
 }

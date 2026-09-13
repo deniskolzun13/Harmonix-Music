@@ -202,3 +202,35 @@ class YandexMusicAdapter(BasePlatformAdapter):
         except Exception as e:
             logger.error(f"Ошибка получения прямой ссылки аудио Яндекс: {e}")
             return None
+
+    def get_wave_tracks(self, limit: int = 20) -> List[Track]:
+        """Возвращает поток персональных треков («Моя волна»)"""
+        if not self.is_authenticated():
+            return []
+        try:
+            station_res = self.client.rotor_station_tracks('user:onyourwave')
+            if not station_res or not station_res.sequence:
+                return []
+            tracks = []
+            for item in station_res.sequence:
+                if item.track:
+                    tracks.append(self._convert_track(item.track))
+                if len(tracks) >= limit:
+                    break
+            return tracks
+        except Exception as e:
+            logger.error(f"Ошибка получения «Моей волны» Яндекс: {e}")
+            return []
+
+    def get_similar_tracks(self, track_id: str, limit: int = 20) -> List[Track]:
+        """Возвращает треки, похожие на указанный трек"""
+        if not self.is_authenticated():
+            return []
+        try:
+            sim = self.client.tracks_similar(track_id)
+            if not sim or not sim.similar_tracks:
+                return []
+            return [self._convert_track(t) for t in sim.similar_tracks[:limit] if t]
+        except Exception as e:
+            logger.error(f"Ошибка получения похожих треков Яндекс: {e}")
+            return []

@@ -18,7 +18,8 @@ from app.models import (
     TransferRequest,
     TransferTask,
     TransferHistoryResponse,
-    ConfirmTransferRequest
+    ConfirmTransferRequest,
+    RelatedArtist
 )
 from app.config import get_local_ip, generate_qr_code_base64, get_allowed_origins
 from app.platforms.manager import manager
@@ -27,6 +28,7 @@ from app.services.transfer_db import get_transfer_history, init_transfer_db, cle
 from app.services.audio_proxy import proxy_audio_stream
 from app.services.url_importer import url_importer
 from app.services.lyrics_service import get_lyrics
+from app.services.artist_service import artist_service
 
 class ImportUrlRequest(BaseModel):
     url: str
@@ -182,6 +184,43 @@ def search_tracks(query: str, platform: PlatformEnum = PlatformEnum.YANDEX):
     return tracks
 
 
+@app.get("/api/recommendations/yandex/wave", response_model=List[Track])
+def get_yandex_wave(limit: int = Query(20, ge=1, le=50)):
+    """«Моя волна» Яндекс Музыки (персональный бесконечный поток)"""
+    adapter = manager.get_adapter(PlatformEnum.YANDEX)
+    tracks = adapter.get_wave_tracks(limit=limit)
+    for t in tracks:
+        t.stream_url = f"/api/stream/{t.platform.value}/{t.id}"
+    return tracks
+
+
+@app.get("/api/recommendations/yandex/similar/{track_id}", response_model=List[Track])
+def get_yandex_similar(track_id: str, limit: int = Query(20, ge=1, le=50)):
+    """Похожие треки Яндекс Музыки (радио по выбранному треку)"""
+    adapter = manager.get_adapter(PlatformEnum.YANDEX)
+    tracks = adapter.get_similar_tracks(track_id=track_id, limit=limit)
+    for t in tracks:
+        t.stream_url = f"/api/stream/{t.platform.value}/{t.id}"
+    return tracks
+
+
+@app.get("/api/recommendations/vk/personal", response_model=List[Track])
+def get_vk_recommendations(limit: int = Query(30, ge=1, le=100)):
+    """Персональные рекомендации VK Музыки"""
+    adapter = manager.get_adapter(PlatformEnum.VK)
+    tracks = adapter.get_personal_recommendations(limit=limit)
+    for t in tracks:
+        t.stream_url = f"/api/stream/{t.platform.value}/{t.id}"
+    return tracks
+
+
+@app.get("/api/recommendations/spotify/related-artists", response_model=List[RelatedArtist])
+def get_spotify_related_artists(artist: str = Query(...), limit: int = Query(15, ge=1, le=50)):
+    """Похожие исполнители от Spotify"""
+    adapter = manager.get_adapter(PlatformEnum.SPOTIFY)
+    return adapter.get_related_artists(artist_id_or_name=artist, limit=limit)
+
+
 @app.get("/api/stream/{platform}/{track_id}")
 async def stream_audio(platform: PlatformEnum, track_id: str, request: Request):
     """Проксирование аудио с поддержкой перемотки (HTTP Range)"""
@@ -274,6 +313,12 @@ async def get_track_lyrics_endpoint(
         track_id=track_id,
         platform=platform
     )
+
+
+@app.get("/api/artist/info")
+async def get_artist_info_endpoint(name: str = Query(...)):
+    """Получение оригинального студийного фото, описания/биографии и жанров музыканта"""
+    return await artist_service.get_artist_info(name)
 
 
 # Раздача мобильного фронтенда (PWA)

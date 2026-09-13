@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional, Tuple
-from app.models import Playlist, Track, PlatformEnum
+from app.models import Playlist, Track, PlatformEnum, RelatedArtist
 from app.platforms.base import BasePlatformAdapter
 from app.utils.retry_helper import api_retry
 
@@ -213,3 +213,36 @@ class SpotifyAdapter(BasePlatformAdapter):
         except Exception as e:
             logger.error(f"Ошибка получения аудио Spotify: {e}")
             return None
+
+    def get_related_artists(self, artist_id_or_name: str, limit: int = 15) -> List[RelatedArtist]:
+        """Возвращает похожих исполнителей от Spotify"""
+        if not self.is_authenticated():
+            return []
+        try:
+            artist_id = artist_id_or_name.strip()
+            # Если передано имя артиста (или строка с пробелами / не 22 символа id), сначала ищем его id
+            if " " in artist_id or not (len(artist_id) == 22 and artist_id.isalnum()):
+                search_res = self.sp.search(q=artist_id, type="artist", limit=1)
+                artists = search_res.get("artists", {}).get("items", [])
+                if not artists:
+                    return []
+                artist_id = artists[0]["id"]
+
+            res = self.sp.artist_related_artists(artist_id)
+            related = res.get("artists", []) if res else []
+            result: List[RelatedArtist] = []
+            for a in related[:limit]:
+                images = a.get("images", [])
+                cover = images[0]["url"] if images else None
+                result.append(RelatedArtist(
+                    id=a["id"],
+                    name=a["name"],
+                    cover_url=cover,
+                    genres=a.get("genres", []),
+                    popularity=a.get("popularity"),
+                    platform=PlatformEnum.SPOTIFY
+                ))
+            return result
+        except Exception as e:
+            logger.error(f"Ошибка получения похожих артистов Spotify: {e}")
+            return []

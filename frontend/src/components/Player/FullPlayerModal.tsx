@@ -16,6 +16,7 @@ import {
   Moon,
   Sliders,
   Activity,
+  Radio,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { CoverImage } from '../Common/CoverImage';
@@ -25,6 +26,7 @@ import { LyricsView } from './LyricsView';
 import { AudioVisualizer } from './AudioVisualizer';
 import { SleepTimerModal } from './SleepTimerModal';
 import { EqualizerModal } from './EqualizerModal';
+import { SimilarTracksModal } from './SimilarTracksModal';
 import { extractCoverPalette, ExtractedPalette } from '../../services/colorExtractor';
 
 function formatTime(seconds: number): string {
@@ -73,6 +75,7 @@ export const FullPlayerModal: React.FC = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
+  const [isSimilarOpen, setIsSimilarOpen] = useState(false);
 
   // Адаптивный цвет фона под обложку
   const [palette, setPalette] = useState<ExtractedPalette | null>(null);
@@ -85,11 +88,12 @@ export const FullPlayerModal: React.FC = () => {
     }
   }, [currentTrack?.cover_url]);
 
-  // Обработка системного жеста "Назад" для очереди, текста, визуализатора и плеера
+  // Обработка системного жеста "Назад" для очереди, текста, визуализатора, похожих треков и плеера
+  useBackNavigation('player_similar_modal', isFullPlayerOpen && isSimilarOpen, () => setIsSimilarOpen(false), 69);
   useBackNavigation('player_visualizer', isFullPlayerOpen && showVisualizer, () => setShowVisualizer(false), 68);
   useBackNavigation('player_lyrics', isFullPlayerOpen && showLyrics, () => setShowLyrics(false), 65);
   useBackNavigation('player_queue', isFullPlayerOpen && showQueue, () => setShowQueue(false), 60);
-  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue && !showLyrics && !showVisualizer, () => setIsFullPlayerOpen(false), 50);
+  useBackNavigation('full_player_modal', isFullPlayerOpen && !showQueue && !showLyrics && !showVisualizer && !isSimilarOpen, () => setIsFullPlayerOpen(false), 50);
 
   const toggleVisualizer = () => {
     setShowVisualizer((prev) => !prev);
@@ -319,6 +323,16 @@ export const FullPlayerModal: React.FC = () => {
             <Activity size={20} />
           </button>
 
+          {/* Кнопка похожих треков и радио */}
+          <button
+            onClick={() => setIsSimilarOpen(true)}
+            className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md text-gray-200 hover:text-amber-300 bg-white/10 hover:bg-amber-500/20"
+            aria-label="Похожие треки и радио"
+            title="Радио и похожие треки"
+          >
+            <Radio size={20} />
+          </button>
+
           {/* Кнопка очереди */}
           <button
             onClick={toggleQueue}
@@ -532,6 +546,13 @@ export const FullPlayerModal: React.FC = () => {
       <EqualizerModal
         isOpen={isEqualizerOpen}
         onClose={() => setIsEqualizerOpen(false)}
+      />
+
+      {/* Модальное окно похожих треков */}
+      <SimilarTracksModal
+        isOpen={isSimilarOpen}
+        onClose={() => setIsSimilarOpen(false)}
+        track={currentTrack}
       />
     </div>
   );

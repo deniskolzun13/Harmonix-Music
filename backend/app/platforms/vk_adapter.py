@@ -223,3 +223,18 @@ class VkMusicAdapter(BasePlatformAdapter):
         except Exception as e:
             logger.error(f"Ошибка получения аудио VK: {e}")
         return None
+
+    def get_personal_recommendations(self, limit: int = 30) -> List[Track]:
+        """Возвращает персональные рекомендации VK Музыки"""
+        if not self.is_authenticated():
+            return []
+        try:
+            params = {"user_id": self.user_id, "count": limit}
+            resp = self._call_api("audio.getRecommendations", params)
+            if not resp:
+                return []
+            items = resp.get("items", []) if isinstance(resp, dict) else resp
+            return [self._convert_track(item) for item in items if isinstance(item, dict)]
+        except Exception as e:
+            logger.error(f"Ошибка получения рекомендаций VK: {e}")
+            return []
