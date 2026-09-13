@@ -6,7 +6,6 @@ import { getServerUrl } from '../api';
 import { findArtistByName } from '../services/playlistStorage';
 import { BackgroundAudio } from 'capacitor-background-audio';
 import { AudioFocus } from '../plugins/audioFocus';
-import { equalizer } from '../services/audioEqualizer';
 import { recordPlayback } from '../services/statsService';
 
 interface PlayerContextType {
@@ -177,17 +176,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.crossOrigin = 'anonymous';
     audio.playbackRate = playbackRate;
     audioRef.current = audio;
-
-    // Инициализация Web Audio API эквалайзера и усиления баса
-    equalizer.init(audio);
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
 
-      // Кроссфейд: плавное затухание громкости в конце трека
+      // Кроссфейд: плавное затухание громкости в самом конце трека
       const cf = crossfadeSecondsRef.current;
       if (
         cf > 0 &&
@@ -246,11 +241,25 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
 
+    const handleError = () => {
+      const err = audio.error;
+      console.warn('Audio playback error:', err?.code, err?.message, audio.src);
+      // Если прямая ссылка оборвалась, пробуем через серверный прокси
+      if (currentTrackRef.current && audio.src && !audio.src.includes('/api/stream/')) {
+        const tr = currentTrackRef.current;
+        const proxyUrl = `${getServerUrl()}/api/stream/${tr.platform}/${tr.id}`;
+        console.info('Retrying via backend stream proxy:', proxyUrl);
+        audio.src = proxyUrl;
+        audio.play().catch(console.warn);
+      }
+    };
+
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.pause();
@@ -259,6 +268,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
     };
   }, [repeatMode]);
 
@@ -360,28 +370,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [currentTrack, isPlaying, queue]);
 
-  // Управление Audio Focus на Android (входящие звонки, голосовые подсказки, сторонние плееры)
+  // Управление Audio Focus на Android (приглушение звука и восстановление)
   useEffect(() => {
-    let lossHandle: { remove: () => void } | null = null;
-    let transHandle: { remove: () => void } | null = null;
     let duckHandle: { remove: () => void } | null = null;
     let gainHandle: { remove: () => void } | null = null;
 
     const setupListeners = async () => {
-      // AUDIOFOCUS_LOSS: полная потеря фокуса (запуск другого плеера)
-      lossHandle = await AudioFocus.addListener('audioFocusLoss', () => {
-        wasPlayingBeforeTransientRef.current = false;
-        audioRef.current?.pause();
-      });
-
-      // AUDIOFOCUS_LOSS_TRANSIENT: временная потеря (входящий телефонный звонок)
-      transHandle = await AudioFocus.addListener('audioFocusLossTransient', () => {
-        if (audioRef.current && !audioRef.current.paused) {
-          wasPlayingBeforeTransientRef.current = true;
-          audioRef.current.pause();
-        }
-      });
-
       // AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: приглушение звука (навигатор / системный звук)
       duckHandle = await AudioFocus.addListener('audioFocusCanDuck', () => {
         isDuckedRef.current = true;
@@ -390,7 +384,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       });
 
-      // AUDIOFOCUS_GAIN: фокус возвращен
+      // AUDIOFOCUS_GAIN: фокус возвращен (восстановление нормальной громкости)
       gainHandle = await AudioFocus.addListener('audioFocusGain', () => {
         if (isDuckedRef.current) {
           isDuckedRef.current = false;
@@ -408,22 +402,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setupListeners().catch(console.warn);
 
     return () => {
-      lossHandle?.remove();
-      transHandle?.remove();
       duckHandle?.remove();
       gainHandle?.remove();
-      AudioFocus.abandonAudioFocus().catch(() => {});
     };
   }, []);
-
-  // Запрос / освобождение Audio Focus в зависимости от воспроизведения
-  useEffect(() => {
-    if (isPlaying) {
-      AudioFocus.requestAudioFocus().catch(console.warn);
-    } else if (!wasPlayingBeforeTransientRef.current) {
-      AudioFocus.abandonAudioFocus().catch(console.warn);
-    }
-  }, [isPlaying]);
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
     flushPlaybackStats();
@@ -460,29 +442,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         audioRef.current.playbackRate = playbackRate;
         audioRef.current.currentTime = 0;
         isCrossfadingRef.current = false;
-
-        if (crossfadeSecondsRef.current > 0) {
-          const targetVol = savedVolumeRef.current;
-          audioRef.current.volume = 0;
-          audioRef.current.play().then(() => {
-            let inStep = 0;
-            const inSteps = 10;
-            const inTimer = setInterval(() => {
-              inStep++;
-              if (audioRef.current) {
-                audioRef.current.volume = Math.min(targetVol, (inStep / inSteps) * targetVol);
-              }
-              if (inStep >= inSteps) clearInterval(inTimer);
-            }, 100);
-          }).catch((err) => {
-            console.warn('Автовоспроизведение заблокировано браузером до первого клика:', err);
-          });
-        } else {
-          audioRef.current.volume = savedVolumeRef.current;
-          audioRef.current.play().catch((err) => {
-            console.warn('Автовоспроизведение заблокировано браузером до первого клика:', err);
-          });
-        }
+        audioRef.current.volume = savedVolumeRef.current;
+        audioRef.current.play().catch((err) => {
+          console.warn('Воспроизведение отклонено браузером или устройством:', err);
+        });
       });
     }
   };

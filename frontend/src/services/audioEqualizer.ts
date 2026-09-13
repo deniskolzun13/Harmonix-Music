@@ -63,12 +63,10 @@ function saveState(state: EqualizerState) {
 
 class EqualizerManager {
   private audioCtx: AudioContext | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
   private bassBoostNode: BiquadFilterNode | null = null;
   private compressorNode: DynamicsCompressorNode | null = null;
   private analyserNode: AnalyserNode | null = null;
-  private isConnected = false;
 
   private state: EqualizerState = loadSavedState();
 
@@ -76,69 +74,11 @@ class EqualizerManager {
     return { ...this.state };
   }
 
-  public init(audio: HTMLAudioElement) {
-    if (this.isConnected) return;
-
-    try {
-      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtxClass) return;
-
-      this.audioCtx = new AudioCtxClass();
-      this.sourceNode = this.audioCtx.createMediaElementSource(audio);
-
-      // 1. Создаем Bass Boost фильтр (низкие частоты 80 Гц)
-      this.bassBoostNode = this.audioCtx.createBiquadFilter();
-      this.bassBoostNode.type = 'lowshelf';
-      this.bassBoostNode.frequency.value = 80;
-      this.bassBoostNode.gain.value = this.state.enabled ? this.state.bassBoost : 0;
-
-      // 2. Создаем 5 полос эквалайзера
-      this.filterNodes = EQUALIZER_BANDS.map((band, idx) => {
-        const node = this.audioCtx!.createBiquadFilter();
-        node.type = band.type;
-        node.frequency.value = band.frequency;
-        node.gain.value = this.state.enabled ? this.state.gains[idx] || 0 : 0;
-        return node;
-      });
-
-      // 3. Создаем DynamicsCompressorNode для нормализации громкости
-      this.compressorNode = this.audioCtx.createDynamicsCompressor();
-      this.compressorNode.threshold.value = this.state.normalization ? -24 : 0;
-      this.compressorNode.knee.value = 30;
-      this.compressorNode.ratio.value = this.state.normalization ? 12 : 1;
-      this.compressorNode.attack.value = 0.003;
-      this.compressorNode.release.value = 0.25;
-
-      // 4. Создаем AnalyserNode для живого спектроанализатора
-      this.analyserNode = this.audioCtx.createAnalyser();
-      this.analyserNode.fftSize = 128;
-      this.analyserNode.smoothingTimeConstant = 0.82;
-
-      // 5. Соединяем цепочку: Source -> BassBoost -> Filter[0..4] -> Compressor -> Analyser -> Destination
-      let lastNode: AudioNode = this.sourceNode;
-      lastNode.connect(this.bassBoostNode);
-      lastNode = this.bassBoostNode;
-
-      for (const filter of this.filterNodes) {
-        lastNode.connect(filter);
-        lastNode = filter;
-      }
-
-      lastNode.connect(this.compressorNode);
-      this.compressorNode.connect(this.analyserNode);
-      this.analyserNode.connect(this.audioCtx.destination);
-      this.isConnected = true;
-
-      // Возобновление AudioContext при воспроизведении
-      const resumeContext = () => {
-        if (this.audioCtx && this.audioCtx.state === 'suspended') {
-          this.audioCtx.resume().catch(() => {});
-        }
-      };
-      audio.addEventListener('play', resumeContext);
-    } catch (e) {
-      console.warn('Инициализация Web Audio API эквалайзера пропущена (нативное воспроизведение):', e);
-    }
+  public init(_audio?: HTMLAudioElement) {
+    // В Capacitor / Android перехват через createMediaElementSource обрывает воспроизведение
+    // кросс-доменных потоков (Яндекс Музыка, VK и внешние URL) из-за строгой политики CORS на сторонних CDN.
+    // Поэтому воспроизведение идет напрямую через нативную аппаратную подсистему устройства,
+    // гарантируя непрерывное звучание и работу в фоновом режиме без заиканий и сбоев.
   }
 
   public setGain(bandIndex: number, gainDb: number) {

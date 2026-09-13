@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { equalizer } from '../../services/audioEqualizer';
 import { Waves, BarChart2 } from 'lucide-react';
 
@@ -54,16 +54,27 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isPlaying, cla
 
         if (isPlaying && analyser) {
           equalizer.getByteFrequencyData(freqData);
-          const binCount = 28;
-          for (let i = 0; i < binCount; i++) {
-            barValues.push(freqData[i] || 0);
+          const hasSignal = freqData.some((v) => v > 0);
+          if (hasSignal) {
+            const binCount = 28;
+            for (let i = 0; i < binCount; i++) {
+              barValues.push(freqData[i] || 0);
+            }
           }
-        } else {
-          idlePhase += 0.04;
+        }
+
+        if (barValues.length === 0) {
+          idlePhase += isPlaying ? 0.08 : 0.02;
           const binCount = 28;
           for (let i = 0; i < binCount; i++) {
-            const idleVal = Math.sin(idlePhase + (i / binCount) * Math.PI * 2) * 12 + 16;
-            barValues.push(Math.max(4, idleVal));
+            const mult = isPlaying ? 140 : 20;
+            const base = isPlaying ? 28 : 10;
+            const wave1 = Math.sin(idlePhase * 1.8 + (i / binCount) * Math.PI * 2);
+            const wave2 = Math.cos(idlePhase * 2.7 + (i / binCount) * Math.PI * 4);
+            const wave3 = Math.sin(idlePhase * 0.9 + (i / binCount) * Math.PI);
+            const combined = Math.abs(wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2);
+            const val = combined * mult + base;
+            barValues.push(Math.min(255, Math.max(6, val)));
           }
         }
 
@@ -113,14 +124,24 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isPlaying, cla
 
         if (isPlaying && analyser) {
           equalizer.getByteTimeDomainData(waveData);
-          for (let i = 0; i < waveData.length; i++) {
-            points.push((waveData[i] - 128) / 128);
+          const hasSignal = waveData.some((v) => Math.abs(v - 128) > 2);
+          if (hasSignal) {
+            for (let i = 0; i < waveData.length; i++) {
+              points.push((waveData[i] - 128) / 128);
+            }
           }
-        } else {
-          idlePhase += 0.05;
-          for (let i = 0; i < 100; i++) {
-            const p = (i / 100) * Math.PI * 4;
-            points.push(Math.sin(idlePhase + p) * 0.12);
+        }
+
+        if (points.length === 0) {
+          idlePhase += isPlaying ? 0.07 : 0.02;
+          const pointCount = 70;
+          const amp = isPlaying ? 0.45 : 0.12;
+          for (let i = 0; i < pointCount; i++) {
+            const normX = i / pointCount;
+            const wave1 = Math.sin(idlePhase * 2.2 + normX * Math.PI * 4);
+            const wave2 = Math.sin(idlePhase * 3.8 + normX * Math.PI * 8) * 0.4;
+            const wave3 = Math.cos(idlePhase * 1.3 + normX * Math.PI * 2) * 0.25;
+            points.push((wave1 + wave2 + wave3) * amp);
           }
         }
 
