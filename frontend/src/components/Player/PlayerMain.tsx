@@ -229,16 +229,22 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     }
   };
 
-  // Массовое кэширование треков текущего плейлиста
+  // Массовое кэширование треков текущего плейлиста (только некэшированные!)
   const handleBulkCacheCurrentPlaylist = async () => {
     if (!activeTracks.length || isBulkCaching) return;
 
+    // Кэшируем строго только те треки, которых еще нет в оффлайн-кэше
+    const uncached = activeTracks.filter((t) => !cachedTrackIds.has(t.id));
+    if (uncached.length === 0) {
+      return;
+    }
+
     setIsBulkCaching(true);
-    setBulkCacheProgress({ current: 0, total: activeTracks.length });
+    setBulkCacheProgress({ current: 0, total: uncached.length });
 
     try {
       await cacheMultipleTracks(
-        activeTracks,
+        uncached,
         activePlaylist?.title || 'Плейлист',
         (current, total) => {
           setBulkCacheProgress({ current, total });
@@ -256,7 +262,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   // Скачивание отдельного трека в кэш
   const handleDownloadSingleTrack = async (e: React.MouseEvent, track: Track) => {
     e.stopPropagation();
-    if (downloadingTrackId || cachedTrackIds.has(track.id)) return;
+    if (downloadingTrackId || (cachedTrackIds.has(track.id) && !track.isPreview)) return;
 
     setDownloadingTrackId(track.id);
     try {
@@ -711,25 +717,49 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
               {/* Кнопки действий: Кэширование и Экспорт */}
               <div className="flex gap-2">
-                <button
-                  onClick={handleBulkCacheCurrentPlaylist}
-                  disabled={isBulkCaching || activeTracks.length === 0}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-                >
-                  {isBulkCaching ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" />
-                      <span>
-                        Кэширование ({bulkCacheProgress?.current} / {bulkCacheProgress?.total})...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Download size={15} />
-                      <span>Скачать на телефон</span>
-                    </>
-                  )}
-                </button>
+                {(() => {
+                  const uncachedCount = activeTracks.filter((t) => !cachedTrackIds.has(t.id)).length;
+                  const allTracksCached = activeTracks.length > 0 && uncachedCount === 0;
+
+                  if (allTracksCached) {
+                    return (
+                      <button
+                        disabled
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 cursor-default"
+                        title="Все треки этого плейлиста сохранены на устройстве"
+                      >
+                        <CheckCircle2 size={15} className="text-emerald-400" />
+                        <span>Все треки в кэше ({activeTracks.length})</span>
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      onClick={handleBulkCacheCurrentPlaylist}
+                      disabled={isBulkCaching || activeTracks.length === 0}
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                    >
+                      {isBulkCaching ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin" />
+                          <span>
+                            Кэширование ({bulkCacheProgress?.current} / {bulkCacheProgress?.total})...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={15} />
+                          <span>
+                            {cachedTrackIds.size > 0 && uncachedCount < activeTracks.length
+                              ? `Скачать новые (${uncachedCount})`
+                              : `Скачать на телефон (${activeTracks.length})`}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 <button
                   onClick={() => exportPlaylistToM3u(activePlaylist.id)}
@@ -1011,19 +1041,20 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                     ) : (
                       <button
                         onClick={(e) => handleDownloadSingleTrack(e, track)}
+                        disabled={isCached && !track.isPreview}
                         title={
                           isCached
                             ? track.isPreview
                               ? 'Сохранено 30 сек. Нажмите для обновления'
-                              : 'Сохранено на телефоне'
+                              : 'Уже сохранено на телефоне'
                             : 'Кэшировать на телефон'
                         }
                         className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                           isCached
                             ? track.isPreview
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-white/5 text-gray-400 hover:text-white'
+                              ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 cursor-pointer'
+                              : 'bg-emerald-500/20 text-emerald-400 cursor-default'
+                            : 'bg-white/5 text-gray-400 hover:text-white cursor-pointer'
                         }`}
                       >
                         {isDownloading ? (

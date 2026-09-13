@@ -53,6 +53,24 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
+ * Возвращает запись трека из локального оффлайн-кэша
+ */
+export async function getCachedTrackRecord(trackId: string): Promise<CachedTrackRecord | null> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(trackId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Проверяет, сохранен ли трек в локальном оффлайн-кэше
  */
 export async function isTrackCached(trackId: string): Promise<boolean> {
@@ -89,12 +107,22 @@ export async function getCachedTrackIds(): Promise<Set<string>> {
 }
 
 /**
- * Сохраняет аудиофайл и обложку трека в локальное хранилище телефона
+ * Сохраняет аудиофайл и обложку трека в локальное хранилище телефона.
+ * Если трек уже сохранен в полном объеме, повторное скачивание пропускается (force = false).
  */
 export async function saveTrackToCache(
   track: Track,
-  playlistTitle?: string
+  playlistTitle?: string,
+  force: boolean = false
 ): Promise<void> {
+  // 0. Если трек уже в кэше и это не превью (или мы не форсируем перезапись) — пропускаем!
+  if (!force) {
+    const existing = await getCachedTrackRecord(track.id);
+    if (existing && (!existing.isPreview || track.isPreview)) {
+      return;
+    }
+  }
+
   const base = getServerUrl();
   let isPreview = false;
   
@@ -178,24 +206,38 @@ export async function saveTrackToCache(
 }
 
 /**
- * Пакетное кэширование списка треков с коллбэком прогресса
+ * Пакетное кэширование списка треков с коллбэком прогресса.
+ * Кэширует ИСКЛЮЧИТЕЛЬНО те треки, которых еще нет в оффлайн-кэше.
  */
 export async function cacheMultipleTracks(
   tracks: Track[],
   playlistTitle?: string,
-  onProgress?: (current: number, total: number, title: string) => void
-): Promise<{ success: number; failed: number }> {
+  onProgress?: (current: number, total: number, title: string) => void,
+  force: boolean = false
+): Promise<{ success: number; failed: number; skipped: number }> {
+  const cachedIds = force ? new Set<string>() : await getCachedTrackIds();
+  // Отбираем только некэшированные треки
+  const uncachedTracks = tracks.filter((t) => !cachedIds.has(t.id));
+  const skipped = tracks.length - uncachedTracks.length;
+
+  if (uncachedTracks.length === 0) {
+    if (onProgress && tracks.length > 0) {
+      onProgress(tracks.length, tracks.length, 'Все треки уже в кэше');
+    }
+    return { success: 0, failed: 0, skipped };
+  }
+
   let success = 0;
   let failed = 0;
-  const total = tracks.length;
+  const total = uncachedTracks.length;
 
   for (let i = 0; i < total; i++) {
-    const track = tracks[i];
+    const track = uncachedTracks[i];
     if (onProgress) {
       onProgress(i + 1, total, track.title);
     }
     try {
-      await saveTrackToCache(track, playlistTitle);
+      await saveTrackToCache(track, playlistTitle, force);
       success++;
     } catch (e) {
       console.error(`Ошибка при кэшировании трека "${track.title}":`, e);
@@ -203,7 +245,7 @@ export async function cacheMultipleTracks(
     }
   }
 
-  return { success, failed };
+  return { success, failed, skipped };
 }
 
 /**

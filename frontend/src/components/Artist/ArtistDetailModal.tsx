@@ -11,12 +11,13 @@ import {
   Mic,
   Clock,
   Search,
+  Loader2,
 } from 'lucide-react';
 import { ArtistSummary, Track } from '../../types';
 import { CoverImage } from '../Common/CoverImage';
 import { ArtistLinks } from '../Common/ArtistLinks';
 import { usePlayer } from '../../context/PlayerContext';
-import { getCachedTrackIds, saveTrackToCache, deleteCachedTrack } from '../../services/cacheManager';
+import { getCachedTrackIds, saveTrackToCache, deleteCachedTrack, cacheMultipleTracks } from '../../services/cacheManager';
 import { useBackNavigation } from '../../services/backNavigation';
 
 interface ArtistDetailModalProps {
@@ -103,12 +104,34 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
     }
   };
 
+  const [isArtistCaching, setIsArtistCaching] = useState(false);
+  const uncachedArtistTracks = tracks.filter((t) => !cachedTrackIds.has(t.id));
+  const allArtistTracksCached = tracks.length > 0 && uncachedArtistTracks.length === 0;
+
   const handleDownloadTrack = async (track: Track) => {
+    if (cachedTrackIds.has(track.id) && !track.isPreview) return;
     if (propDownload) {
       propDownload(track);
     } else {
       await saveTrackToCache(track);
       setLocalCachedIds((prev) => new Set([...prev, track.id]));
+    }
+  };
+
+  const handleCacheAllArtistTracks = async () => {
+    if (!uncachedArtistTracks.length || isArtistCaching) return;
+    setIsArtistCaching(true);
+    try {
+      await cacheMultipleTracks(
+        uncachedArtistTracks,
+        `Треки: ${artist.name}`
+      );
+      const updated = await getCachedTrackIds();
+      setLocalCachedIds(updated);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsArtistCaching(false);
     }
   };
 
@@ -220,6 +243,29 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
               className="py-3 px-3.5 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold transition-all shadow"
             >
               <Shuffle size={16} />
+            </button>
+
+            <button
+              onClick={handleCacheAllArtistTracks}
+              disabled={isArtistCaching || allArtistTracksCached || tracks.length === 0}
+              title={
+                allArtistTracksCached
+                  ? 'Все треки музыканта сохранены'
+                  : `Скачать новые (${uncachedArtistTracks.length})`
+              }
+              className={`py-3 px-3.5 rounded-2xl text-xs font-bold transition-all shadow flex items-center justify-center ${
+                allArtistTracksCached
+                  ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+                  : 'bg-white/10 hover:bg-white/15 active:scale-95 text-white'
+              }`}
+            >
+              {isArtistCaching ? (
+                <Loader2 size={16} className="animate-spin text-blue-400" />
+              ) : allArtistTracksCached ? (
+                <CheckCircle2 size={16} className="text-emerald-400" />
+              ) : (
+                <Download size={16} />
+              )}
             </button>
 
             {onAddTrackToArtist && (
@@ -339,11 +385,20 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
                           e.stopPropagation();
                           handleDownloadTrack(track);
                         }}
-                        title={isCached ? 'Сохранено на телефоне' : 'Кэшировать на телефон'}
+                        disabled={isCached && !track.isPreview}
+                        title={
+                          isCached
+                            ? track.isPreview
+                              ? 'Сохранено 30 сек. Нажмите для обновления'
+                              : 'Уже сохранено на телефоне'
+                            : 'Кэшировать на телефон'
+                        }
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
                           isCached
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-white/5 text-gray-400 hover:text-white'
+                            ? track.isPreview
+                              ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 cursor-pointer'
+                              : 'bg-emerald-500/20 text-emerald-400 cursor-default'
+                            : 'bg-white/5 text-gray-400 hover:text-white cursor-pointer'
                         }`}
                       >
                         {isCached ? <CheckCircle2 size={13} /> : <Download size={13} />}

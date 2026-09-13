@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Track, ArtistSummary } from '../types';
-import { getCachedTrackAudioUrl } from '../services/cacheManager';
+import { getCachedTrackAudioUrl, saveTrackToCache } from '../services/cacheManager';
 import { getDirectYmAudioUrl } from '../services/standaloneImporter';
 import { getServerUrl } from '../api';
 import { findArtistByName } from '../services/playlistStorage';
@@ -135,6 +135,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const currentTrackRef = useRef<Track | null>(null);
   const trackPlayStartRef = useRef<number>(0);
   const trackPlaySecondsRef = useRef<number>(0);
+  const autoCachedTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     currentTrackRef.current = currentTrack;
@@ -181,6 +182,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
+
+      // Фоновое автокэширование строго некэшированной музыки при прослушивании > 15 секунд
+      if (
+        audio.currentTime >= 15 &&
+        currentTrackRef.current &&
+        currentTrackRef.current.id !== autoCachedTrackIdRef.current
+      ) {
+        const tr = currentTrackRef.current;
+        autoCachedTrackIdRef.current = tr.id;
+        const autoCacheEnabled = localStorage.getItem('harmonix_auto_cache_played') !== 'false';
+        if (autoCacheEnabled && tr.platform !== 'local') {
+          saveTrackToCache(tr).catch(() => {});
+        }
+      }
 
       // Кроссфейд: плавное затухание громкости в самом конце трека
       const cf = crossfadeSecondsRef.current;
@@ -409,6 +424,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
     flushPlaybackStats();
+    autoCachedTrackIdRef.current = null;
     if (newQueue) {
       setQueue(newQueue);
       if (isShuffle) {

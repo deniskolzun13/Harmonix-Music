@@ -59,6 +59,16 @@ export const AccountsModal: React.FC = () => {
     formattedSize: '0 МБ',
   });
 
+  const [autoCachePlayed, setAutoCachePlayed] = useState<boolean>(() => {
+    return localStorage.getItem('harmonix_auto_cache_played') !== 'false';
+  });
+
+  const toggleAutoCachePlayed = () => {
+    const next = !autoCachePlayed;
+    setAutoCachePlayed(next);
+    localStorage.setItem('harmonix_auto_cache_played', next ? 'true' : 'false');
+  };
+
   const loadCacheInfo = async () => {
     try {
       const stats = await getCacheStats();
@@ -872,8 +882,30 @@ export const AccountsModal: React.FC = () => {
               </button>
             )}
           </div>
+
+          <div className="bg-[#0d0f15] rounded-2xl p-3 mb-3 border border-white/5 flex items-center justify-between">
+            <div className="pr-3">
+              <p className="text-xs font-semibold text-white">Автосохранение при прослушивании</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Автоматически кэшировать только новые (некэшированные) треки после 15 сек. воспроизведения
+              </p>
+            </div>
+            <button
+              onClick={toggleAutoCachePlayed}
+              className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
+                autoCachePlayed ? 'bg-emerald-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
+                  autoCachePlayed ? 'left-6' : 'left-1'
+                }`}
+              />
+            </button>
+          </div>
+
           <p className="text-[11px] text-gray-400 leading-relaxed">
-            Вся музыка, добавленная по ссылкам, может быть сохранена на устройство для прослушивания без подключения к сети.
+            Вся музыка, добавленная по ссылкам, может быть сохранена на устройство для прослушивания без подключения к сети. Кэшируются исключительно новые треки, дубликаты повторно не скачиваются.
           </p>
         </div>
 

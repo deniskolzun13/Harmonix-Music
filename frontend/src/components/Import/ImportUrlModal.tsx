@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Link,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Playlist, Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
-import { cacheMultipleTracks } from '../../services/cacheManager';
+import { cacheMultipleTracks, getCachedTrackIds } from '../../services/cacheManager';
 import { saveImportedPlaylist } from '../../services/playlistStorage';
 
 interface ImportUrlModalProps {
@@ -34,6 +34,7 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [importedPlaylist, setImportedPlaylist] = useState<Playlist | null>(null);
   const [importedTracks, setImportedTracks] = useState<Track[]>([]);
+  const [cachedTrackIds, setCachedTrackIds] = useState<Set<string>>(new Set());
 
   // Состояние кэширования
   const [isCaching, setIsCaching] = useState(false);
@@ -43,6 +44,12 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
     title: string;
   } | null>(null);
   const [cacheSuccess, setCacheSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      getCachedTrackIds().then(setCachedTrackIds).catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -82,19 +89,28 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
   const handleCacheAll = async () => {
     if (!importedTracks.length || isCaching) return;
 
+    // Скачиваем строго только те треки, которых еще нет в оффлайн-кэше
+    const toCache = importedTracks.filter((t) => !cachedTrackIds.has(t.id));
+    if (toCache.length === 0) {
+      setCacheSuccess(true);
+      return;
+    }
+
     setIsCaching(true);
     setCacheSuccess(false);
-    setCacheProgress({ current: 0, total: importedTracks.length, title: 'Подготовка...' });
+    setCacheProgress({ current: 0, total: toCache.length, title: 'Подготовка...' });
 
     try {
       await cacheMultipleTracks(
-        importedTracks,
+        toCache,
         importedPlaylist?.title || 'Импортированный плейлист',
         (current, total, title) => {
           setCacheProgress({ current, total, title });
         }
       );
       setCacheSuccess(true);
+      const updatedIds = await getCachedTrackIds();
+      setCachedTrackIds(updatedIds);
       if (onCacheCompleted) {
         onCacheCompleted();
       }
@@ -260,35 +276,67 @@ export const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
                 </div>
               )}
 
-              {/* Успешное сохранение */}
-              {cacheSuccess && (
-                <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-3 flex items-center gap-2 text-xs text-emerald-300">
-                  <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
-                  <span>Все треки и обложки успешно сохранены в память телефона!</span>
-                </div>
-              )}
+              {/* Успешное сохранение или статус уже сохраненных */}
+              {(() => {
+                const uncachedCount = importedTracks.filter((t) => !cachedTrackIds.has(t.id)).length;
+                const allAlreadyCached = importedTracks.length > 0 && uncachedCount === 0;
 
-              {/* Кнопки действий */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={handleCacheAll}
-                  disabled={isCaching}
-                  className="py-3 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-                >
-                  <Download size={15} />
-                  <span>{isCaching ? 'Кэширование...' : 'Кэшировать всё'}</span>
-                </button>
+                return (
+                  <>
+                    {(cacheSuccess || allAlreadyCached) && (
+                      <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-3 flex items-center gap-2 text-xs text-emerald-300">
+                        <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                        <span>
+                          {allAlreadyCached && !cacheSuccess
+                            ? 'Все треки этого плейлиста уже сохранены на телефоне!'
+                            : 'Все новые треки и обложки успешно сохранены в память телефона!'}
+                        </span>
+                      </div>
+                    )}
 
-                <button
-                  type="button"
-                  onClick={handlePlayNow}
-                  className="py-3 px-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
-                >
-                  <Play size={15} fill="currentColor" />
-                  <span>Слушать в плеере</span>
-                </button>
-              </div>
+                    {/* Кнопки действий */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCacheAll}
+                        disabled={isCaching || allAlreadyCached}
+                        className={`py-3 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                          allAlreadyCached
+                            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 cursor-default'
+                            : 'bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20'
+                        }`}
+                      >
+                        {allAlreadyCached ? (
+                          <>
+                            <CheckCircle2 size={15} />
+                            <span>Все в кэше</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download size={15} />
+                            <span>
+                              {isCaching
+                                ? 'Кэширование...'
+                                : uncachedCount < importedTracks.length
+                                ? `Кэшировать (${uncachedCount})`
+                                : 'Кэшировать всё'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handlePlayNow}
+                        className="py-3 px-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
+                      >
+                        <Play size={15} fill="currentColor" />
+                        <span>Слушать в плеере</span>
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Список треков превью */}
               <div>
