@@ -5,6 +5,7 @@ from app.platforms.base import BasePlatformAdapter
 from app.platforms.yandex_adapter import YandexMusicAdapter
 from app.platforms.vk_adapter import VkMusicAdapter
 from app.platforms.spotify_adapter import SpotifyAdapter
+from app.platforms.youtube_adapter import YouTubeMusicAdapter
 from app.platforms.demo_adapter import DemoPlatformAdapter
 from app.config import load_auth_config, save_auth_config
 
@@ -18,6 +19,7 @@ class PlatformManager:
             PlatformEnum.YANDEX: DemoPlatformAdapter(PlatformEnum.YANDEX),
             PlatformEnum.VK: DemoPlatformAdapter(PlatformEnum.VK),
             PlatformEnum.SPOTIFY: DemoPlatformAdapter(PlatformEnum.SPOTIFY),
+            PlatformEnum.YOUTUBE: DemoPlatformAdapter(PlatformEnum.YOUTUBE),
         }
         self._init_adapters()
 
@@ -33,6 +35,8 @@ class PlatformManager:
             refresh_token=self.config.spotify_refresh_token,
             access_token=getattr(self.config, 'spotify_token', None)
         )
+        # YouTube
+        self.adapters[PlatformEnum.YOUTUBE] = YouTubeMusicAdapter(oauth_json=getattr(self.config, 'youtube_oauth_json', None))
 
     def get_adapter(self, platform: PlatformEnum, allow_demo: bool = True) -> BasePlatformAdapter:
         adapter = self.adapters.get(platform)
@@ -46,10 +50,12 @@ class PlatformManager:
         ym = self.adapters.get(PlatformEnum.YANDEX)
         vk = self.adapters.get(PlatformEnum.VK)
         sp = self.adapters.get(PlatformEnum.SPOTIFY)
+        yt = self.adapters.get(PlatformEnum.YOUTUBE)
 
         ym_ok, ym_name = ym.get_user_info() if ym else (False, None)
         vk_ok, vk_name = vk.get_user_info() if vk else (False, None)
         sp_ok, sp_name = sp.get_user_info() if sp else (False, None)
+        yt_ok, yt_name = yt.get_user_info() if yt else (False, None)
 
         return AuthStatus(
             yandex=ym_ok,
@@ -57,7 +63,9 @@ class PlatformManager:
             vk=vk_ok,
             vk_username=vk_name,
             spotify=sp_ok,
-            spotify_username=sp_name
+            spotify_username=sp_name,
+            youtube=yt_ok,
+            youtube_username=yt_name
         )
 
     def update_tokens(self, new_config: AuthConfig):

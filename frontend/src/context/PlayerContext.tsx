@@ -424,6 +424,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
+    broadcastWs({ action: 'play_track', track, queue: newQueue });
     flushPlaybackStats();
     autoCachedTrackIdRef.current = null;
     if (newQueue) {
@@ -477,6 +478,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const togglePlay = () => {
+    broadcastWs({ action: isPlaying ? 'pause' : 'resume' });
     if (!audioRef.current || !currentTrack) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -519,6 +521,7 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
   const shufflePointerRef = useRef<number>(0);
 
   const nextTrack = () => {
+    broadcastWs({ action: 'next' });
     if (!queue.length || !currentTrack) return;
 
     if (isShuffle) {
@@ -549,6 +552,7 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
   };
 
   const prevTrack = () => {
+    broadcastWs({ action: 'prev' });
     if (!audioRef.current) return;
     // Если трек уже играет больше 3 секунд, перемотать в начало
     if (audioRef.current.currentTime > 3) {
@@ -574,6 +578,7 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
   };
 
   const seek = (seconds: number) => {
+    broadcastWs({ action: 'seek', currentTime: seconds });
     if (audioRef.current) {
       audioRef.current.currentTime = seconds;
       setCurrentTime(seconds);
@@ -638,14 +643,73 @@ function generateSmartShuffleQueue(tracks: Track[], currentTrackId?: string): Tr
   }, [isPlaying, sleepTimerOption, sleepTimerRemaining]);
 
   const queueRef = useRef<Track[]>(queue);
-  useEffect(() => {
-    queueRef.current = queue;
-  }, [queue]);
+  useEffect(() => { queueRef.current = queue; }, [queue]);
 
   const nextTrackRef = useRef(nextTrack);
+  useEffect(() => { nextTrackRef.current = nextTrack; }, [nextTrack]);
+
+  const prevTrackRef = useRef(prevTrack);
+  useEffect(() => { prevTrackRef.current = prevTrack; }, [prevTrack]);
+
+  const playTrackRef = useRef(playTrack);
+  useEffect(() => { playTrackRef.current = playTrack; }, [playTrack]);
+
+  // --- WebSocket Sync (Spotify Connect Style) ---
+  const wsRef = useRef<WebSocket | null>(null);
+  const clientIdRef = useRef(Math.random().toString(36).substring(7));
+  const isRemoteActionRef = useRef(false);
+
   useEffect(() => {
-    nextTrackRef.current = nextTrack;
-  }, [nextTrack]);
+    let wsUrl = getServerUrl().replace('http', 'ws');
+    if (!wsUrl.endsWith('/')) wsUrl += '/';
+    wsUrl += 'api/ws/sync';
+    
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.clientId === clientIdRef.current) return;
+
+        isRemoteActionRef.current = true;
+        
+        switch (data.action) {
+          case 'play_track':
+            if (data.track) playTrackRef.current(data.track, data.queue);
+            break;
+          case 'pause':
+            audioRef.current?.pause();
+            break;
+          case 'resume':
+            audioRef.current?.play().catch(() => {});
+            break;
+          case 'seek':
+            if (data.currentTime !== undefined && audioRef.current) {
+              audioRef.current.currentTime = data.currentTime;
+            }
+            break;
+          case 'next':
+            nextTrackRef.current();
+            break;
+          case 'prev':
+            prevTrackRef.current();
+            break;
+        }
+        
+        setTimeout(() => { isRemoteActionRef.current = false; }, 300);
+      } catch(e) {}
+    };
+
+    return () => ws.close();
+  }, []);
+
+  const broadcastWs = (payload: any) => {
+    if (isRemoteActionRef.current) return; // Prevent infinite loop
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ clientId: clientIdRef.current, ...payload }));
+    }
+  };
 
   // Жест «Встряхнуть для перемешивания» (Shake-to-Shuffle)
   useEffect(() => {

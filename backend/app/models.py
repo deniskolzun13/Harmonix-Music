@@ -8,6 +8,7 @@ class PlatformEnum(str, Enum):
     VK = "vk"
     SPOTIFY = "spotify"
     LOCAL = "local"
+    YOUTUBE = "youtube"
 
 
 class Track(BaseModel):
@@ -49,6 +50,7 @@ class AuthConfig(BaseModel):
     spotify_client_secret: Optional[str] = None
     spotify_refresh_token: Optional[str] = None
     spotify_redirect_uri: Optional[str] = "http://localhost:8000/api/auth/spotify/callback"
+    youtube_oauth_json: Optional[str] = None
 
 
 class AuthStatus(BaseModel):
@@ -58,6 +60,8 @@ class AuthStatus(BaseModel):
     vk_username: Optional[str] = None
     spotify: bool = False
     spotify_username: Optional[str] = None
+    youtube: bool = False
+    youtube_username: Optional[str] = None
 
 
 class TransferRequest(BaseModel):

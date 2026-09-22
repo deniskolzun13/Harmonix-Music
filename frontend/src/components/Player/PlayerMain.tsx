@@ -19,15 +19,15 @@ import {
   Upload,
   Share2,
   FileText,
-  ArrowUp,
-  ArrowDown,
-  TrendingUp,
   Sparkles,
 } from 'lucide-react';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableTrackItem } from './SortableTrackItem';
 import { Track } from '../../types';
 import { importPlaylistByUrl } from '../../api';
 import { usePlayer } from '../../context/PlayerContext';
-import { useTheme } from '../../context/ThemeContext';
 import { CoverImage } from '../Common/CoverImage';
 import {
   getCachedTracks,
@@ -77,12 +77,13 @@ interface PlayerMainProps {
 
 export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   const { currentTrack, isPlaying, playTrack, togglePlay, openArtist } = usePlayer();
-  const { theme } = useTheme();
 
   const hasYandexToken = Boolean(localStorage.getItem('harmonix_yandex_token'));
 
   // Вкладка библиотеки: "Мои плейлисты", "Музыканты" или "Скачанные на телефон"
   const [activeTab, setActiveTab] = useState<LibraryTab>('playlists');
+
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Сохраненные плейлисты (импортированные по ссылке)
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylistRecord[]>([]);
@@ -133,6 +134,31 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
     setSavedPlaylists(list);
     if (list.length > 0 && !activePlaylistId) {
       setActivePlaylistId(list[0].playlist.id);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id && activeTab === 'playlists' && activePlaylistId) {
+      const activeIdx = displayedTracks.findIndex((t) => t.id === active.id);
+      const overIdx = displayedTracks.findIndex((t) => t.id === over.id);
+      
+      if (activeIdx !== -1 && overIdx !== -1) {
+        const updated = moveTrackInPlaylist(activePlaylistId, activeIdx, overIdx);
+        setSavedPlaylists(updated);
+      }
     }
   };
 
@@ -360,6 +386,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
       )
     : sourceTracks;
 
+  const virtualizer = useWindowVirtualizer({
+    count: displayedTracks.length,
+    estimateSize: () => 64, // 64px height per item
+    overscan: 5,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
+  });
+
   // Платформенный значок
   const renderPlatformBadge = (platform?: string) => {
     switch (platform) {
@@ -393,35 +426,27 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-safe-top pb-44 text-white select-none">
+    <div className="max-w-md mx-auto px-5 pt-safe-top pb-44 text-white select-none">
       {/* Шапка приложения */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <span>Harmonix</span>
-            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               Mobile
             </span>
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">Музыка по ссылкам и оффлайн-кэш на телефоне</p>
+          <p className="text-xs text-zinc-400 mt-1 font-medium">Музыка по ссылкам и кэш</p>
         </div>
 
-        {/* Кнопка смены темы, добавления трека и импорта */}
+        {/* Кнопки действий */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsThemeModalOpen(true)}
             title="Выбрать тему оформления"
-            className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-95 flex items-center justify-center shadow-lg"
+            className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all active:scale-95 flex items-center justify-center backdrop-blur-md"
           >
             <Palette size={18} />
-          </button>
-
-          <button
-            onClick={() => setIsStatsModalOpen(true)}
-            title="Музыкальная статистика (Wrapped)"
-            className="p-2.5 rounded-2xl theme-card hover:bg-white/10 text-purple-400 hover:text-purple-300 transition-all active:scale-95 flex items-center justify-center shadow-lg"
-          >
-            <TrendingUp size={18} />
           </button>
 
           <button
@@ -429,41 +454,34 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               setAddTrackDefaultArtist(undefined);
               setIsAddTrackModalOpen(true);
             }}
-            title="Добавить трек (файл MP3, ссылка, вручную)"
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
+            title="Добавить трек"
+            className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 flex items-center justify-center backdrop-blur-md"
           >
-            <Plus size={15} />
-            <span>+ Трек</span>
+            <Plus size={18} />
           </button>
 
           <button
             onClick={() => localFileInputRef.current?.click()}
-            title="Открыть аудиофайлы с телефона или ПК"
-            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-600/25 active:scale-95 transition-all"
+            title="Открыть аудиофайлы"
+            className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-teal-400 hover:text-teal-300 transition-all active:scale-95 flex items-center justify-center backdrop-blur-md"
           >
-            {isImportingLocalFiles ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <HardDrive size={15} />
-            )}
-            <span className="hidden sm:inline">Файлы</span>
+            {isImportingLocalFiles ? <Loader2 size={18} className="animate-spin" /> : <HardDrive size={18} />}
           </button>
 
           <button
             onClick={() => setIsImportModalOpen(true)}
             title="Импорт по ссылке"
-            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 active:scale-95 transition-all"
+            className="p-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 text-white transition-all active:scale-95 flex items-center justify-center backdrop-blur-md shadow-[0_0_15px_rgba(79,70,229,0.3)]"
           >
-            <Link2 size={15} />
-            <span className="hidden sm:inline">Ссылка</span>
+            <Link2 size={18} />
           </button>
         </div>
       </div>
 
       {/* Поле быстрого добавления по ссылке */}
-      <form onSubmit={handleQuickImport} className="mb-4">
-        <div className="theme-card rounded-2xl p-1.5 flex items-center gap-2 shadow-lg border border-white/10 focus-within:border-blue-500/50 transition-colors">
-          <div className="pl-2 text-gray-400 flex items-center">
+      <form onSubmit={handleQuickImport} className="mb-6">
+        <div className="bg-white/5 border border-white/5 rounded-2xl p-1.5 flex items-center gap-2 focus-within:border-indigo-500/50 focus-within:bg-white/10 transition-colors backdrop-blur-sm">
+          <div className="pl-3 text-zinc-400 flex items-center">
             <Link2 size={16} />
           </div>
           <input
@@ -473,14 +491,14 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               setQuickUrl(e.target.value);
               setQuickImportError(null);
             }}
-            placeholder="Вставьте ссылку на плейлист (Яндекс, VK, Spotify)..."
-            className="w-full bg-transparent py-2 text-xs text-white placeholder-gray-500 focus:outline-none"
+            placeholder="Вставьте ссылку на плейлист..."
+            className="w-full bg-transparent py-2 text-sm text-white placeholder-zinc-500 focus:outline-none"
           />
           {quickUrl ? (
             <button
               type="button"
               onClick={() => setQuickUrl('')}
-              className="text-gray-500 hover:text-white text-xs px-1"
+              className="text-zinc-500 hover:text-white text-xs px-2"
             >
               ✕
             </button>
@@ -489,18 +507,18 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               type="button"
               onClick={handlePasteQuickUrl}
               title="Вставить из буфера"
-              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors flex-shrink-0"
             >
-              <Clipboard size={14} />
+              <Clipboard size={16} />
             </button>
           )}
           <button
             type="submit"
             disabled={!quickUrl.trim() || isQuickImporting}
-            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-40 text-white text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 shadow-md shadow-blue-600/20"
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-40 text-white text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0"
           >
             {isQuickImporting ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin" />
             ) : (
               <span>Импорт</span>
             )}
@@ -541,34 +559,30 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
-      {/* Основные вкладки плеера: Плейлисты / Музыканты / Скачанные / Волна */}
-      <div className="grid grid-cols-4 gap-1 mb-5">
+      {/* Основные вкладки плеера */}
+      <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-none pb-1">
         <button
           onClick={() => setActiveTab('playlists')}
-          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${
             activeTab === 'playlists'
-              ? theme === 'glass'
-                ? 'bg-blue-500/30 border-blue-400 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.4)] backdrop-blur-md'
-                : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/25'
-              : 'theme-card text-gray-400 hover:text-white border-white/5'
+              ? 'bg-white text-black'
+              : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <Music size={13} />
-          <span className="truncate">Плейлисты</span>
+          <Music size={14} />
+          <span>Плейлисты</span>
         </button>
 
         <button
           onClick={() => setActiveTab('artists')}
-          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${
             activeTab === 'artists'
-              ? theme === 'glass'
-                ? 'bg-purple-500/30 border-purple-400 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.4)] backdrop-blur-md'
-                : 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/25'
-              : 'theme-card text-gray-400 hover:text-white border-white/5'
+              ? 'bg-white text-black'
+              : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <Mic size={13} />
-          <span className="truncate">Артисты</span>
+          <Mic size={14} />
+          <span>Артисты</span>
         </button>
 
         <button
@@ -576,30 +590,26 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
             setActiveTab('cached');
             refreshCacheInfo();
           }}
-          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${
             activeTab === 'cached'
-              ? theme === 'glass'
-                ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.4)] backdrop-blur-md'
-                : 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/25'
-              : 'theme-card text-gray-400 hover:text-white border-white/5'
+              ? 'bg-white text-black'
+              : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <HardDrive size={13} />
-          <span className="truncate">Кэш</span>
+          <HardDrive size={14} />
+          <span>Кэш</span>
         </button>
 
         <button
           onClick={() => setActiveTab('recommendations')}
-          className={`py-2 px-1 rounded-2xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all border ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${
             activeTab === 'recommendations'
-              ? theme === 'glass'
-                ? 'bg-amber-500/30 border-amber-400 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.4)] backdrop-blur-md'
-                : 'bg-gradient-to-r from-amber-500 to-rose-500 border-amber-400 text-black shadow-lg shadow-amber-500/25'
-              : 'theme-card text-gray-400 hover:text-white border-white/5'
+              ? 'bg-white text-black'
+              : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <Sparkles size={13} className={activeTab === 'recommendations' ? 'animate-pulse' : ''} />
-          <span className="truncate">Волна</span>
+          <Sparkles size={14} className={activeTab === 'recommendations' ? 'text-black' : 'text-amber-400'} />
+          <span>Волна</span>
         </button>
       </div>
 
@@ -694,9 +704,9 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
           {/* Карточка активного плейлиста */}
           {activePlaylist && (
-            <div className="theme-card rounded-3xl p-4 border border-white/10 shadow-xl space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gray-800 flex-shrink-0 shadow-md">
+            <div className="bg-white/[0.02] rounded-3xl p-5 border border-white/5 space-y-4 mb-4 backdrop-blur-md">
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white/5 flex-shrink-0">
                   <CoverImage
                     src={activePlaylist.cover_url}
                     alt={activePlaylist.title}
@@ -704,17 +714,17 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                     fallbackType="music"
                   />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="min-w-0 flex-1 py-1">
+                  <div className="flex items-center gap-2 mb-1.5">
                     {renderPlatformBadge(activePlaylist.platform)}
-                    <span className="text-[11px] text-gray-400 font-mono">
+                    <span className="text-xs text-zinc-500 font-medium tracking-tight">
                       {activeTracks.length} треков
                     </span>
                   </div>
-                  <h3 className="text-sm font-bold text-white truncate leading-tight">
+                  <h3 className="text-base font-bold text-white truncate leading-tight tracking-tight">
                     {activePlaylist.title}
                   </h3>
-                  <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                  <p className="text-xs text-zinc-400 truncate mt-1">
                     {activePlaylist.description || 'Импортировано по ссылке'}
                   </p>
                 </div>
@@ -730,11 +740,11 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                     return (
                       <button
                         disabled
-                        className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 cursor-default"
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 cursor-default"
                         title="Все треки этого плейлиста сохранены на устройстве"
                       >
-                        <CheckCircle2 size={15} className="text-emerald-400" />
-                        <span>Все треки в кэше ({activeTracks.length})</span>
+                        <CheckCircle2 size={15} />
+                        <span>В кэше ({activeTracks.length})</span>
                       </button>
                     );
                   }
@@ -743,13 +753,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                     <button
                       onClick={handleBulkCacheCurrentPlaylist}
                       disabled={isBulkCaching || activeTracks.length === 0}
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 active:scale-95 disabled:opacity-50 font-bold text-xs flex items-center justify-center gap-2 transition-all"
                     >
                       {isBulkCaching ? (
                         <>
                           <Loader2 size={15} className="animate-spin" />
                           <span>
-                            Кэширование ({bulkCacheProgress?.current} / {bulkCacheProgress?.total})...
+                            {bulkCacheProgress?.current} / {bulkCacheProgress?.total}
                           </span>
                         </>
                       ) : (
@@ -757,8 +767,8 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                           <Download size={15} />
                           <span>
                             {cachedTrackIds.size > 0 && uncachedCount < activeTracks.length
-                              ? `Скачать новые (${uncachedCount})`
-                              : `Скачать на телефон (${activeTracks.length})`}
+                              ? `Скачать (${uncachedCount})`
+                              : `Скачать (${activeTracks.length})`}
                           </span>
                         </>
                       )}
@@ -769,18 +779,18 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                 <button
                   onClick={() => exportPlaylistToM3u(activePlaylist.id)}
                   title="Экспорт плейлиста в файл .M3U8"
-                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all active:scale-95"
+                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/5 transition-all active:scale-95"
                 >
-                  <FileText size={14} className="text-cyan-400" />
+                  <FileText size={14} className="text-sky-400" />
                   <span>.M3U</span>
                 </button>
 
                 <button
                   onClick={() => exportPlaylistToJson(activePlaylist.id)}
                   title="Экспорт плейлиста в файл .JSON"
-                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all active:scale-95"
+                  className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/5 transition-all active:scale-95"
                 >
-                  <Share2 size={14} className="text-purple-400" />
+                  <Share2 size={14} className="text-indigo-400" />
                   <span>.JSON</span>
                 </button>
               </div>
@@ -964,30 +974,49 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
               : 'В этом плейлисте нет треков'}
           </div>
         ) : (
-          <div className="space-y-1.5">
-            {displayedTracks.map((track, trackIdx) => {
-              const isCurrent = currentTrack?.id === track.id;
-              const isCached = cachedTrackIds.has(track.id);
-              const isDownloading = downloadingTrackId === track.id;
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={displayedTracks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+              <div ref={listRef} style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const trackIdx = virtualItem.index;
+                  const track = displayedTracks[trackIdx];
+                  const isCurrent = currentTrack?.id === track.id;
+                  const isCached = cachedTrackIds.has(track.id);
+                  const isDownloading = downloadingTrackId === track.id;
 
-              return (
-                <div
-                  key={`${track.platform}-${track.id}`}
-                  onClick={() => {
-                    if (isCurrent) {
-                      togglePlay();
-                    } else {
-                      playTrack(track, displayedTracks);
-                    }
-                  }}
-                  className={`flex items-center justify-between p-2.5 rounded-2xl cursor-pointer transition-all border ${
-                    isCurrent
-                      ? 'bg-blue-600/15 border-blue-500/30'
-                      : 'theme-card hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-800 flex-shrink-0 shadow-md">
+                  return (
+                    <SortableTrackItem
+                      key={virtualItem.key}
+                      id={track.id}
+                      index={virtualItem.index}
+                      isDragEnabled={activeTab === 'playlists' && !filterQuery}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualItem.start}px)`,
+                        paddingBottom: '6px' // space-y-1.5 equivalent
+                      }}
+                    >
+                      <div
+                        data-index={virtualItem.index}
+                        ref={virtualizer.measureElement}
+                        onClick={() => {
+                          if (isCurrent) {
+                            togglePlay();
+                          } else {
+                            playTrack(track, displayedTracks);
+                          }
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-colors ${
+                          isCurrent
+                            ? 'bg-white/10'
+                            : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex-shrink-0">
                       <CoverImage
                         src={track.cover_url}
                         alt={track.title}
@@ -997,9 +1026,9 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                       {isCurrent && isPlaying && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                           <div className="flex gap-0.5 items-end h-4">
-                            <span className="w-1 bg-blue-400 animate-pulse h-full" />
-                            <span className="w-1 bg-blue-400 animate-pulse h-2" />
-                            <span className="w-1 bg-blue-400 animate-pulse h-3" />
+                            <span className="w-1 bg-white animate-pulse h-full" />
+                            <span className="w-1 bg-white animate-pulse h-2" />
+                            <span className="w-1 bg-white animate-pulse h-3" />
                           </div>
                         </div>
                       )}
@@ -1007,13 +1036,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
                     <div className="min-w-0 flex-1">
                       <p
-                        className={`text-sm font-semibold truncate ${
-                          isCurrent ? 'text-blue-400' : 'text-white'
+                        className={`text-sm font-semibold truncate tracking-tight ${
+                          isCurrent ? 'text-white' : 'text-zinc-200'
                         }`}
                       >
                         {track.title}
                       </p>
-                      <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
+                      <p className="text-xs text-zinc-400 truncate mt-0.5 flex items-center gap-1.5">
                         <ArtistLinks artist={track.artist} title={track.title} />
                         {isCached && (
                           <span
@@ -1021,7 +1050,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                               track.isPreview ? 'text-amber-400' : 'text-emerald-400'
                             }`}
                           >
-                            • 💾 {track.isPreview ? 'Оффлайн (демо 30 сек)' : 'Оффлайн'}
+                            • {track.isPreview ? 'демо' : 'кэш'}
                           </span>
                         )}
                       </p>
@@ -1087,29 +1116,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
 
                     {/* Если открыт плейлист: перемещение вверх/вниз и удаление */}
                     {activeTab === 'playlists' && activePlaylist && (
-                      <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => {
-                            const updated = moveTrackInPlaylist(activePlaylist.id, trackIdx, trackIdx - 1);
-                            setSavedPlaylists(updated);
-                          }}
-                          disabled={trackIdx === 0}
-                          title="Поднять трек выше"
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-white disabled:opacity-20 transition-all active:scale-90"
-                        >
-                          <ArrowUp size={11} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const updated = moveTrackInPlaylist(activePlaylist.id, trackIdx, trackIdx + 1);
-                            setSavedPlaylists(updated);
-                          }}
-                          disabled={trackIdx === displayedTracks.length - 1}
-                          title="Опустить трек ниже"
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-white disabled:opacity-20 transition-all active:scale-90"
-                        >
-                          <ArrowDown size={11} />
-                        </button>
+                      <div className="flex items-center gap-0.5 pr-8" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => {
                             const updated = removeTrackFromPlaylist(activePlaylist.id, track.id);
@@ -1118,7 +1125,7 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                           title="Удалить из этого плейлиста"
                           className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 transition-all active:scale-90"
                         >
-                          <Trash2 size={11} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     )}
@@ -1127,8 +1134,8 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                     <button
                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                         isCurrent && isPlaying
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-white/5 text-gray-300 hover:text-white'
+                          ? 'bg-white text-black shadow-md'
+                          : 'bg-white/5 text-zinc-300 hover:text-white'
                       }`}
                     >
                       {isCurrent && isPlaying ? (
@@ -1138,10 +1145,13 @@ export const PlayerMain: React.FC<PlayerMainProps> = ({ onOpenSettings }) => {
                       )}
                     </button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                    </div>
+                  </SortableTrackItem>
+                );
+              })}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* Спейсер для полной прокрутки выше мини-плеера и нижнего бара */}

@@ -51,6 +51,12 @@ export const AccountsModal: React.FC = () => {
   const [isVerifyingSpotify, setIsVerifyingSpotify] = useState(false);
   const [spotifyAccountInfo, setSpotifyAccountInfo] = useState<{ id?: string; name?: string } | null>(null);
 
+  // --- 4. YouTube Music ---
+  const [youtubeToken, setYoutubeToken] = useState(() => localStorage.getItem('harmonix_youtube_oauth') || '');
+  const [youtubeInput, setYoutubeInput] = useState('');
+  const [isVerifyingYoutube, setIsVerifyingYoutube] = useState(false);
+  const [youtubeAccountInfo, setYoutubeAccountInfo] = useState<{ name?: string } | null>(null);
+
   // Общие настройки
   const [serverUrlInput, setServerUrlInput] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -171,6 +177,28 @@ export const AccountsModal: React.FC = () => {
     }
   };
 
+  // Проверка YouTube токена
+  const checkYoutubeToken = async (tok: string) => {
+    if (!tok.trim()) return;
+    setIsVerifyingYoutube(true);
+    try {
+      const sUrl = getServerUrl();
+      if (sUrl) {
+        const res = await fetch(`${sUrl}/api/auth/status`);
+        if (res.ok) {
+          const st = await res.json();
+          if (st.youtube && st.youtube_username) {
+            setYoutubeAccountInfo({ name: st.youtube_username });
+          }
+        }
+      }
+    } catch {
+      // Игнорируем оффлайн бэкенда
+    } finally {
+      setIsVerifyingYoutube(false);
+    }
+  };
+
   useEffect(() => {
     setServerUrlInput(getServerUrl());
     loadCacheInfo();
@@ -183,6 +211,9 @@ export const AccountsModal: React.FC = () => {
 
     const savedSp = localStorage.getItem('harmonix_spotify_token');
     if (savedSp) checkSpotifyToken(savedSp);
+
+    const savedYt = localStorage.getItem('harmonix_youtube_oauth');
+    if (savedYt) checkYoutubeToken(savedYt);
   }, []);
 
   // --- Яндекс Handlers ---
@@ -357,6 +388,39 @@ export const AccountsModal: React.FC = () => {
     setSpotifyToken('');
     setSpotifyAccountInfo(null);
     setSuccessMsg('Spotify отключен.');
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  // --- YouTube Music Handlers ---
+  const handleSaveYoutubeToken = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    let val = youtubeInput.trim();
+    if (!val) return;
+
+    localStorage.setItem('harmonix_youtube_oauth', val);
+    setYoutubeToken(val);
+    setYoutubeInput('');
+    setSuccessMsg('🎉 YouTube Music успешно подключен!');
+    setTimeout(() => setSuccessMsg(''), 4000);
+
+    const sUrl = getServerUrl();
+    if (sUrl) {
+      fetch(`${sUrl}/api/auth/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ youtube_oauth_json: val }),
+      }).catch(() => {});
+    }
+
+    checkYoutubeToken(val);
+  };
+
+  const handleDeleteYoutubeToken = () => {
+    if (!confirm('Отключить YouTube Music?')) return;
+    localStorage.removeItem('harmonix_youtube_oauth');
+    setYoutubeToken('');
+    setYoutubeAccountInfo(null);
+    setSuccessMsg('YouTube Music отключен.');
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
@@ -811,7 +875,110 @@ export const AccountsModal: React.FC = () => {
         </div>
 
         {/* ========================================================
-            4. ТЕМЫ ОФОРМЛЕНИЯ
+            4. YOUTUBE MUSIC
+           ======================================================== */}
+        <div className="theme-card bg-[#151821] border border-white/10 rounded-3xl p-4 shadow-xl mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-red-600/20 text-red-500 flex items-center justify-center font-bold text-xs border border-red-500/30">
+                YT
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white">YouTube Music</h2>
+                <p className="text-[10px] text-gray-400">Синхронизация с YouTube Music</p>
+              </div>
+            </div>
+
+            {youtubeToken ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
+                Подключен
+              </span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/50 text-gray-400 border border-white/10 font-semibold">
+                Не подключен
+              </span>
+            )}
+          </div>
+
+          {youtubeToken ? (
+            <div className="bg-[#0d0f15] rounded-2xl p-3 border border-emerald-500/30 mb-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <span className="text-xs font-bold text-emerald-300">YouTube Music подключен</span>
+                </div>
+                <button
+                  onClick={handleDeleteYoutubeToken}
+                  className="text-[11px] text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Отключить
+                </button>
+              </div>
+              {youtubeAccountInfo?.name && (
+                <p className="text-[11px] text-gray-300">
+                  Аккаунт: <span className="font-mono text-white font-bold">{youtubeAccountInfo.name}</span>
+                </p>
+              )}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[10px] text-gray-500 font-mono truncate max-w-[200px]">
+                  {youtubeToken.slice(0, 15)}...
+                </span>
+                <button
+                  onClick={() => checkYoutubeToken(youtubeToken)}
+                  disabled={isVerifyingYoutube}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium"
+                >
+                  <RefreshCw size={11} className={isVerifyingYoutube ? 'animate-spin' : ''} />
+                  <span>Проверить</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="pt-1">
+                <p className="text-[11px] text-gray-400 mb-2">
+                  Для доступа вставьте JSON заголовков или oauth.json из ytmusicapi:
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveYoutubeToken} className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={youtubeInput}
+                    onChange={(e) => setYoutubeInput(e.target.value)}
+                    placeholder="Вставьте oauth_json"
+                    className="w-full bg-[#0d0f15] border border-white/10 rounded-xl py-2 pl-3 pr-8 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-mono"
+                  />
+                  {!youtubeInput && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const txt = await navigator.clipboard.readText();
+                          if (txt) setYoutubeInput(txt.trim());
+                        } catch {}
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
+                    >
+                      <Clipboard size={13} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={!youtubeInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-md shadow-red-600/20 flex-shrink-0"
+                >
+                  <Save size={13} />
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================
+            5. ТЕМЫ ОФОРМЛЕНИЯ
            ======================================================== */}
         <div className="theme-card bg-[#151821] border border-white/10 rounded-3xl p-4 shadow-xl">
           <div className="flex items-center gap-2 mb-3">

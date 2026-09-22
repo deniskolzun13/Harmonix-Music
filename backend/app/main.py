@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 
@@ -55,6 +55,38 @@ def on_startup():
     """Инициализация базы данных и очистка старых записей переноса (>30 дней)"""
     init_transfer_db()
     cleanup_old_transfers(days=30)
+
+class SyncConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str, sender: WebSocket):
+        for connection in self.active_connections:
+            if connection != sender:
+                try:
+                    await connection.send_text(message)
+                except Exception as e:
+                    logger.warning(f"Failed to send to websocket: {e}")
+
+sync_manager = SyncConnectionManager()
+
+@app.websocket("/api/ws/sync")
+async def websocket_sync_endpoint(websocket: WebSocket):
+    await sync_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await sync_manager.broadcast(data, websocket)
+    except WebSocketDisconnect:
+        sync_manager.disconnect(websocket)
 
 
 @app.get("/api/network/info")

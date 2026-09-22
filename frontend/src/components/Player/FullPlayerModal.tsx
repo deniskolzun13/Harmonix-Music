@@ -36,6 +36,9 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+import { motion, AnimatePresence } from 'framer-motion';
+import { triggerHaptic } from '../../utils/haptics';
+
 export const FullPlayerModal: React.FC = () => {
   const {
     currentTrack,
@@ -135,13 +138,21 @@ export const FullPlayerModal: React.FC = () => {
 
   // Обработчики кнопок со сдвигом трека
   const handleNextTrack = () => {
+    triggerHaptic();
     setSwitchAnim('next');
-    nextTrack();
+    setTimeout(() => {
+      nextTrack();
+      setSwitchAnim('none' as any);
+    }, 150);
   };
 
   const handlePrevTrack = () => {
+    triggerHaptic();
     setSwitchAnim('prev');
-    prevTrack();
+    setTimeout(() => {
+      prevTrack();
+      setSwitchAnim('none' as any);
+    }, 150);
   };
 
   // Жест закрытия свайпом вниз по верхней панели
@@ -203,42 +214,39 @@ export const FullPlayerModal: React.FC = () => {
     local: 'Локальный файл',
   }[currentTrack.platform];
 
-  // Стили для анимации поднятия и опускания
-  const transformStyle = isDragging
-    ? `translateY(${dragY}px)`
-    : isFullPlayerOpen
-    ? 'translateY(0%)'
-    : 'translateY(100%)';
 
-  const opacityStyle = isFullPlayerOpen ? 1 : 0;
-  const pointerEventsClass = isFullPlayerOpen ? 'pointer-events-auto' : 'pointer-events-none';
 
   return (
-    <div
-      style={{
-        transform: transformStyle,
-        opacity: opacityStyle,
-        transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease',
-      }}
-      className={`fixed inset-0 z-50 flex flex-col bg-[#0d0f15] text-white select-none ${pointerEventsClass}`}
-    >
-      {/* Адаптивный живой градиент под цвета обложки */}
-      <div
-        className="absolute inset-0 pointer-events-none transition-all duration-1000 ease-in-out"
-        style={{
-          background: palette
-            ? `radial-gradient(circle at 50% 30%, ${palette.primary} 0%, ${palette.secondary} 48%, #0d0f15 88%)`
-            : undefined,
-        }}
-      />
+    <AnimatePresence>
+      {isFullPlayerOpen && (
+        <motion.div
+          initial={{ y: '100%', opacity: 0 }}
+          animate={{ y: isDragging ? dragY : 0, opacity: 1 }}
+          exit={{ y: '100%', opacity: 0 }}
+          transition={
+            isDragging
+              ? { type: 'tween', duration: 0 }
+              : { type: 'spring', damping: 25, stiffness: 200 }
+          }
+          className="fixed inset-0 z-50 flex flex-col bg-[#09090b] text-white select-none pointer-events-auto"
+        >
+          {/* Адаптивный живой градиент под цвета обложки */}
+          <div
+            className="absolute inset-0 pointer-events-none transition-all duration-1000 ease-in-out"
+            style={{
+              background: palette
+                ? `radial-gradient(circle at 50% 30%, ${palette.primary} 0%, ${palette.secondary} 48%, #09090b 88%)`
+                : undefined,
+            }}
+          />
       {/* Размытый фоновый цвет от обложки */}
       {currentTrack.cover_url && (
         <div
-          className="absolute inset-0 opacity-20 filter blur-3xl pointer-events-none bg-cover bg-center transition-all duration-1000"
+          className="absolute inset-0 opacity-10 filter blur-3xl pointer-events-none bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTrack.cover_url})` }}
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d0f15]/75 to-[#0d0f15] pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#09090b]/80 to-[#09090b] pointer-events-none" />
 
       {/* Верхняя ручка для свайпа вниз (Drag Indicator) */}
       <div
@@ -437,27 +445,27 @@ export const FullPlayerModal: React.FC = () => {
         </div>
 
         {/* Слайдер перемотки */}
-        <div className="mb-4">
+        <div className="mb-6">
           <input
             type="range"
             min={0}
             max={duration || 100}
             value={currentTime}
             onChange={(e) => seek(Number(e.target.value))}
-            className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
+            className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white focus:outline-none"
           />
-          <div className="flex justify-between text-xs text-gray-400 font-mono mt-2">
+          <div className="flex justify-between text-[11px] text-white/50 font-medium mt-2">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
         {/* Кнопки воспроизведения */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <button
             onClick={toggleShuffle}
-            className={`p-2 transition-colors active:scale-90 ${
-              isShuffle ? 'text-blue-500' : 'text-gray-400 hover:text-white'
+            className={`p-2 transition-colors active:scale-95 ${
+              isShuffle ? 'text-white' : 'text-white/40 hover:text-white/80'
             }`}
             aria-label="Случайный порядок"
           >
@@ -466,32 +474,32 @@ export const FullPlayerModal: React.FC = () => {
 
           <button
             onClick={handlePrevTrack}
-            className="p-3 text-gray-200 hover:text-white active:scale-90 transition-transform"
+            className="p-3 text-white/80 hover:text-white active:scale-90 transition-transform"
             aria-label="Предыдущий трек"
           >
-            <SkipBack size={28} />
+            <SkipBack size={32} fill="currentColor" />
           </button>
 
           <button
-            onClick={togglePlay}
-            className="w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-xl shadow-blue-600/40 active:scale-95 transition-all"
+            onClick={() => { triggerHaptic(); togglePlay(); }}
+            className="w-16 h-16 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_4px_24px_rgba(255,255,255,0.2)] active:scale-95 transition-all"
             aria-label={isPlaying ? 'Пауза' : 'Воспроизведение'}
           >
-            {isPlaying ? <Pause size={28} fill="white" /> : <Play size={28} fill="white" className="ml-1" />}
+            {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
           </button>
 
           <button
             onClick={handleNextTrack}
-            className="p-3 text-gray-200 hover:text-white active:scale-90 transition-transform"
+            className="p-3 text-white/80 hover:text-white active:scale-90 transition-transform"
             aria-label="Следующий трек"
           >
-            <SkipForward size={28} />
+            <SkipForward size={32} fill="currentColor" />
           </button>
 
           <button
             onClick={toggleRepeat}
-            className={`p-2 transition-colors active:scale-90 ${
-              repeatMode !== 'off' ? 'text-blue-500' : 'text-gray-400 hover:text-white'
+            className={`p-2 transition-colors active:scale-95 ${
+              repeatMode !== 'off' ? 'text-white' : 'text-white/40 hover:text-white/80'
             }`}
             aria-label="Режим повтора"
           >
@@ -503,7 +511,7 @@ export const FullPlayerModal: React.FC = () => {
         <div className="flex items-center gap-3 px-2">
           <button
             onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-            className="text-gray-400 hover:text-white active:scale-90 transition-transform"
+            className="text-white/50 hover:text-white active:scale-90 transition-transform"
             aria-label="Вкл/выкл звук"
           >
             {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -515,19 +523,19 @@ export const FullPlayerModal: React.FC = () => {
             step={0.01}
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
-            className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-gray-400 focus:outline-none"
+            className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white/80 focus:outline-none"
           />
           {/* Регулировка скорости воспроизведения */}
           <button
             onClick={cyclePlaybackRate}
-            className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-gray-300 active:scale-90 transition-all"
+            className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white/70 active:scale-90 transition-all"
             title="Скорость воспроизведения (нажмите для смены)"
           >
             {playbackRate}x
           </button>
           <button
             onClick={() => setIsEqualizerOpen(true)}
-            className="text-gray-400 hover:text-blue-400 active:scale-90 transition-all p-1"
+            className="text-white/50 hover:text-white active:scale-90 transition-all p-1"
             aria-label="Эквалайзер"
             title="Эквалайзер, Бас и Студия звука"
           >
@@ -554,6 +562,8 @@ export const FullPlayerModal: React.FC = () => {
         onClose={() => setIsSimilarOpen(false)}
         track={currentTrack}
       />
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
