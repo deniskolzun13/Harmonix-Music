@@ -20,7 +20,7 @@ export function getServerUrl(): string {
 
   // Если открыто в нативном приложении (Capacitor Android APK)
   if (isNativeMobile()) {
-    return 'http://192.168.0.11:8000';
+    return 'http://192.168.0.12:8000';
   }
 
   // Если открыто в браузере мобильного или ПК по локальной сети
